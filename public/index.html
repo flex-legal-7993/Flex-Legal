@@ -551,6 +551,44 @@
     text-align: center;
   }
 
+  /* Package selection screen */
+  .pkg-screen { display: flex; flex-direction: column; gap: 16px; }
+  .pkg-screen.hidden { display: none !important; }
+  .pkg-hero { background: var(--navy); border-radius: 14px; padding: 24px 26px; position: relative; overflow: hidden; }
+  .pkg-hero::before { content: ''; position: absolute; top: 0; right: 0; width: 120px; height: 120px; background: radial-gradient(circle, rgba(201,168,76,0.15) 0%, transparent 70%); pointer-events: none; }
+  .pkg-hero-eyebrow { font-size: 11px; color: var(--gold); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; margin-bottom: 8px; }
+  .pkg-hero-title { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--white); font-weight: 500; margin-bottom: 8px; line-height: 1.3; }
+  .pkg-hero-body { font-size: 14px; color: rgba(255,255,255,0.75); line-height: 1.6; }
+  .pkg-section-label { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; padding: 0 2px; }
+  .pkg-grid { display: flex; flex-direction: column; gap: 10px; }
+  .pkg-card { background: var(--white); border: 2px solid var(--border); border-radius: 12px; padding: 16px 18px; cursor: pointer; display: flex; align-items: flex-start; gap: 14px; transition: border-color 0.15s, box-shadow 0.15s; }
+  .pkg-card:hover { border-color: var(--navy-light); box-shadow: 0 2px 8px rgba(15,61,107,0.08); }
+  .pkg-card.selected { border-color: var(--navy); box-shadow: 0 2px 12px rgba(15,61,107,0.12); }
+  .pkg-radio { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border); flex-shrink: 0; margin-top: 2px; display: flex; align-items: center; justify-content: center; transition: border-color 0.15s, background 0.15s; }
+  .pkg-card.selected .pkg-radio { border-color: var(--navy); background: var(--navy); }
+  .pkg-radio-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--white); opacity: 0; transition: opacity 0.15s; }
+  .pkg-card.selected .pkg-radio-dot { opacity: 1; }
+  .pkg-card-content { flex: 1; }
+  .pkg-card-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; font-family: 'Playfair Display', serif; }
+  .pkg-card.selected .pkg-card-title { color: var(--navy); }
+  .pkg-card-desc { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+  .pkg-card-includes { font-size: 11px; color: var(--text-light); margin-top: 6px; line-height: 1.5; }
+  .contact-form-card { background: var(--white); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+  .contact-form-header { padding: 14px 18px; background: var(--cream-dark); border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .contact-form-body { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+  .form-field { display: flex; flex-direction: column; gap: 5px; }
+  .form-label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .form-input { padding: 10px 14px; font-size: 14px; font-family: 'Source Sans 3', sans-serif; border: 1px solid var(--border); border-radius: 8px; outline: none; color: var(--text); background: var(--cream); transition: border-color 0.2s, background 0.2s; }
+  .form-input:focus { border-color: var(--navy); background: var(--white); }
+  .form-input.error { border-color: #e74c3c; }
+  .form-error-msg { font-size: 11px; color: #e74c3c; display: none; }
+  .form-error-msg.visible { display: block; }
+  .pkg-continue-btn { width: 100%; padding: 13px; background: var(--navy); color: var(--white); border: none; border-radius: 8px; font-size: 14px; font-weight: 600; font-family: 'Source Sans 3', sans-serif; cursor: pointer; transition: background 0.2s, transform 0.1s; letter-spacing: 0.02em; }
+  .pkg-continue-btn:hover { background: var(--navy-light); }
+  .pkg-continue-btn:active { transform: scale(0.99); }
+  .pkg-continue-btn:disabled { background: var(--border); color: var(--text-light); cursor: not-allowed; transform: none; }
+  .pkg-footer-note { font-size: 11px; color: var(--text-light); text-align: center; }
+
   /* Utility */
   .hidden { display: none !important; }
   
@@ -576,8 +614,8 @@
 
 <main class="main">
 
-  <!-- Intro card -->
-  <div class="intro-card" id="introCard">
+  <!-- Intro card (hidden — replaced by package selection screen) -->
+  <div class="intro-card hidden" id="introCard">
     <div class="intro-eyebrow">Confidential &amp; Secure</div>
     <div class="intro-title">Your Estate Plan Starts Here</div>
     <div class="intro-body">Answer a few questions and our team will prepare your personalized estate planning documents — attorney-reviewed within 1–2 business days.</div>
@@ -592,13 +630,89 @@
       </div>
       <div class="intro-meta-item">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13.5 19.79 19.79 0 0 1 1.61 4.93 2 2 0 0 1 3.59 3h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 10.5a16 16 0 0 0 6 6l.92-.92a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.72 18z"/></svg>
-        Utah &amp; Idaho licensed
+        Utah licensed
       </div>
     </div>
   </div>
 
+  <!-- Package selection screen -->
+  <div class="pkg-screen" id="pkgScreen">
+
+    <div class="pkg-hero">
+      <div class="pkg-hero-eyebrow">Confidential &amp; Secure</div>
+      <div class="pkg-hero-title">Your Estate Plan Starts Here</div>
+      <div class="pkg-hero-body">Select the service that fits your situation. Our attorneys will prepare your documents and review everything with you before signing.</div>
+    </div>
+
+    <div class="pkg-section-label">Select your service</div>
+    <div class="pkg-grid">
+
+      <div class="pkg-card" id="pkg-married" onclick="selectPackage('Complete Estate Plan — Married', this)">
+        <div class="pkg-radio"><div class="pkg-radio-dot"></div></div>
+        <div class="pkg-card-content">
+          <div class="pkg-card-title">Complete Estate Plan — Married</div>
+          <div class="pkg-card-desc">Comprehensive estate planning for married couples, including joint trust and all supporting documents.</div>
+          <div class="pkg-card-includes">Includes: Revocable Living Trust &middot; Pour-Over Wills &middot; Financial Powers of Attorney &middot; Healthcare Directives</div>
+        </div>
+      </div>
+
+      <div class="pkg-card" id="pkg-single" onclick="selectPackage('Complete Estate Plan — Single', this)">
+        <div class="pkg-radio"><div class="pkg-radio-dot"></div></div>
+        <div class="pkg-card-content">
+          <div class="pkg-card-title">Complete Estate Plan — Single</div>
+          <div class="pkg-card-desc">Full estate planning package for individuals, with a single-person revocable trust and all supporting documents.</div>
+          <div class="pkg-card-includes">Includes: Revocable Living Trust &middot; Pour-Over Will &middot; Financial Power of Attorney &middot; Healthcare Directive</div>
+        </div>
+      </div>
+
+      <div class="pkg-card" id="pkg-poa" onclick="selectPackage('Financial Power of Attorney', this)">
+        <div class="pkg-radio"><div class="pkg-radio-dot"></div></div>
+        <div class="pkg-card-content">
+          <div class="pkg-card-title">Financial Power of Attorney</div>
+          <div class="pkg-card-desc">Appoint a trusted person to manage your financial affairs if you become incapacitated or unavailable.</div>
+          <div class="pkg-card-includes">Includes: Durable Financial Power of Attorney &middot; Agent authorization language</div>
+        </div>
+      </div>
+
+      <div class="pkg-card" id="pkg-sns" onclick="selectPackage('Special Needs Trust', this)">
+        <div class="pkg-radio"><div class="pkg-radio-dot"></div></div>
+        <div class="pkg-card-content">
+          <div class="pkg-card-title">Special Needs Trust</div>
+          <div class="pkg-card-desc">Protect a loved one with a disability by ensuring their inheritance doesn't disqualify them from government benefits.</div>
+          <div class="pkg-card-includes">Includes: Special Needs Trust Agreement &middot; Attorney consultation on benefits preservation</div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="contact-form-card">
+      <div class="contact-form-header">Your Contact Information</div>
+      <div class="contact-form-body">
+        <div class="form-field">
+          <label class="form-label" for="clientName">Full Name</label>
+          <input type="text" class="form-input" id="clientName" placeholder="Jane Smith" autocomplete="name" />
+          <span class="form-error-msg" id="nameError">Please enter your full name</span>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="clientEmail">Email Address</label>
+          <input type="email" class="form-input" id="clientEmail" placeholder="jane@example.com" autocomplete="email" />
+          <span class="form-error-msg" id="emailError">Please enter a valid email address</span>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="clientPhone">Phone Number</label>
+          <input type="tel" class="form-input" id="clientPhone" placeholder="801-555-1234" autocomplete="tel" />
+          <span class="form-error-msg" id="phoneError">Please enter your phone number</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="pkg-continue-btn" id="pkgContinueBtn" onclick="proceedToConsent()" disabled>Continue to Review &amp; Consent</button>
+    <div class="pkg-footer-note">Flex Legal Services LLC &middot; Licensed in Utah &middot; Attorney-client privilege protected</div>
+
+  </div>
+
   <!-- Consent screen -->
-  <div class="consent-screen" id="consentScreen">
+  <div class="consent-screen hidden" id="consentScreen">
     <div class="consent-header">
       <div class="consent-header-eyebrow">Before You Begin</div>
       <div class="consent-header-title">Estate Planning Intake — Disclosure &amp; Consent</div>
@@ -722,8 +836,58 @@
 </main>
 
 <script>
+// ─── Package selection ────────────────────────────────────────────────────────
+let selectedPackage = null;
+let clientInfo = {};
+
+function selectPackage(packageName, cardEl) {
+  // Deselect all cards
+  document.querySelectorAll('.pkg-card').forEach(c => c.classList.remove('selected'));
+  // Select clicked card
+  cardEl.classList.add('selected');
+  selectedPackage = packageName;
+  updatePkgContinueBtn();
+}
+
+function updatePkgContinueBtn() {
+  const name  = document.getElementById('clientName').value.trim();
+  const email = document.getElementById('clientEmail').value.trim();
+  const phone = document.getElementById('clientPhone').value.trim();
+  const valid = selectedPackage && name && email && phone;
+  document.getElementById('pkgContinueBtn').disabled = !valid;
+}
+
+// Live validation on contact form inputs
+['clientName','clientEmail','clientPhone'].forEach(id => {
+  document.getElementById(id).addEventListener('input', updatePkgContinueBtn);
+});
+
+function proceedToConsent() {
+  const name  = document.getElementById('clientName').value.trim();
+  const email = document.getElementById('clientEmail').value.trim();
+  const phone = document.getElementById('clientPhone').value.trim();
+
+  // Validate
+  let valid = true;
+  if (!name)  { document.getElementById('nameError').classList.add('visible');  valid = false; } 
+  else          document.getElementById('nameError').classList.remove('visible');
+  if (!email || !email.includes('@')) { document.getElementById('emailError').classList.add('visible'); valid = false; }
+  else          document.getElementById('emailError').classList.remove('visible');
+  if (!phone) { document.getElementById('phoneError').classList.add('visible'); valid = false; }
+  else          document.getElementById('phoneError').classList.remove('visible');
+  if (!selectedPackage || !valid) return;
+
+  // Store client info
+  clientInfo = { name, email, phone, package: selectedPackage };
+
+  // Hide package screen, show consent screen
+  document.getElementById('pkgScreen').classList.add('hidden');
+  document.getElementById('consentScreen').classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 // ─── Configuration ───────────────────────────────────────────────────────────
-const BACKEND_URL = 'https://flex-legal-intake.onrender.com'; // Updated during deployment
+const BACKEND_URL = 'https://YOUR-RENDER-APP.onrender.com'; // Updated during deployment
 
 // ─── State ───────────────────────────────────────────────────────────────────
 let conversationHistory = [];
@@ -937,16 +1101,20 @@ consentBtn.addEventListener('click', () => {
   document.getElementById('progressWrap').classList.remove('hidden');
   document.getElementById('chatCard').classList.remove('hidden');
 
-  // Start the chatbot
-  init();
+  // Start the chatbot with client info and selected package
+  init(clientInfo, selectedPackage);
 });
 
 // ─── Init: load first message from backend ────────────────────────────────────
-async function init() {
+async function init(clientInfo, selectedPackage) {
   setWaiting(true);
   showTyping();
   try {
-    const res = await fetch(`${BACKEND_URL}/start`, { method: 'POST' });
+    const res = await fetch(`${BACKEND_URL}/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientInfo, selectedPackage })
+    });
     if (!res.ok) throw new Error();
     const data = await res.json();
     hideTyping();
@@ -955,8 +1123,11 @@ async function init() {
     setWaiting(false);
   } catch {
     hideTyping();
-    appendBotMessage("Welcome to Flex Legal Services. I'm here to help prepare your estate planning documents. Everything you share is confidential and protected under attorney-client privilege.\n\nLet's start — are you married or single?");
-    conversationHistory.push({ role: 'assistant', content: "Welcome to Flex Legal Services. I'm here to help prepare your estate planning documents. Everything you share is confidential and protected under attorney-client privilege.\n\nLet's start — are you married or single?" });
+    const firstName = clientInfo && clientInfo.name ? clientInfo.name.split(' ')[0] : '';
+    const greeting = firstName ? `Hi ${firstName}!` : 'Welcome to Flex Legal Services.';
+    const fallback = `${greeting} I'm here to help prepare your ${selectedPackage || 'estate planning documents'}. Everything you share is confidential and protected under attorney-client privilege.\n\nLet's get started — what is your full legal name as it should appear on your documents?`;
+    appendBotMessage(fallback);
+    conversationHistory.push({ role: 'assistant', content: fallback });
     setWaiting(false);
   }
 }

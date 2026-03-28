@@ -77,11 +77,19 @@ Thank you so much — that's everything we need. Our team will prepare your draf
 // ─── Route: Start conversation ────────────────────────────────────────────────
 app.post('/start', async (req, res) => {
   try {
+    const { clientInfo, selectedPackage } = req.body || {};
+    const firstName = clientInfo && clientInfo.name ? clientInfo.name.split(' ')[0] : '';
+    const pkg = selectedPackage || 'estate planning';
+
+    const openingMsg = firstName
+      ? `Hello, my name is ${clientInfo.name}. I selected the "${pkg}" package and would like to get started.`
+      : `Hello, I would like to get started with my estate planning.`;
+
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 1000,
       system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: 'Hello, I would like to get started with my estate planning.' }]
+      messages: [{ role: 'user', content: openingMsg }]
     });
     res.json({ reply: response.content[0].text });
   } catch (err) {
@@ -143,49 +151,67 @@ async function generateAndEmail(data) {
     return;
   }
 
-  // Load template
-  const content = fs.readFileSync(templatePath, 'binary');
-  const zip = new PizZip(content);
+  // Build merge data first so it's available for footer processing
+  const mergeData = {
+    Your_First_Name:                  data.Your_First_Name || '',
+    Your_Last_Name:                   data.Your_Last_Name || '',
+    Your_Birth_Date:                  data.Your_Birth_Date || '',
+    Your_Preferred_Signature_Name:    data.Your_Preferred_Signature_Name || '',
+    Your_Cell_Phone:                  data.Your_Cell_Phone || '',
+    Your_Work_Phone_Number:           data.Your_Work_Phone_Number || 'N/A',
+    Address:                          data.Address || '',
+    City:                             data.City || '',
+    State:                            data.State || 'Utah',
+    Zip_Code:                         data.Zip_Code || '',
+    County:                           data.County || '',
+    Spouse_First_Name:                data.Spouse_First_Name || '',
+    Spouse_Birth_Date:                data.Spouse_Birth_Date || '',
+    Spouses_Preferred_Signature_Name: data.Spouses_Preferred_Signature_Name || '',
+    Spouse_Cell_Phone:                data.Spouse_Cell_Phone || '',
+    Spouse_Work_Phone_Number:         data.Spouse_Work_Phone_Number || 'N/A',
+    Full_Legal_Names_of_Children:     data.Full_Legal_Names_of_Children || 'None',
+    Name_of_Trust:                    data.Name_of_Trust || `${data.Your_Last_Name} Family Trust`,
+    NAME_OF_TRUST:                    data.Name_of_Trust || `${data.Your_Last_Name} Family Trust`,
+    First_Choice_Successor_Trustee:   data.First_Choice_Successor_Trustee || '',
+    Second_Choice_Successor_Trustee:  data.Second_Choice_Successor_Trustee || '',
+    'Second_Choice_Successor_Trustee_': data.Second_Choice_Successor_Trustee || '',
+    Alternate_Agent_Name:             data.Alternate_Agent_Name || '',
+    Alternate_Agent_Address:          data.Alternate_Agent_Address || '',
+    Alternate_Agent_City:             data.Alternate_Agent_City || '',
+    Alternate_Agent_State:            data.Alternate_Agent_State || '',
+    Alternate_Agent_Zip:              data.Alternate_Agent_Zip || '',
+    Alternate_Agent_Cell_Phone:       data.Alternate_Agent_Cell_Phone || '',
+    Alternate_Agent_Work_Phone:       data.Alternate_Agent_Work_Phone || 'N/A',
+  };
 
+  // Load template
+  const fileContent = fs.readFileSync(templatePath, 'binary');
+  const zip = new PizZip(fileContent);
+
+  // Manually replace merge fields in all header/footer XML files
+  // (docxtemplater only processes document.xml by default)
+  Object.keys(zip.files).forEach(filePath => {
+    if (filePath.match(/^word\/(header|footer)\d*\.xml$/)) {
+      let xmlContent = zip.files[filePath].asText();
+      let changed = false;
+      Object.keys(mergeData).forEach(key => {
+        const marker = '«' + key + '»';
+        if (xmlContent.includes(marker)) {
+          xmlContent = xmlContent.split(marker).join(mergeData[key] || '');
+          changed = true;
+        }
+      });
+      if (changed) zip.file(filePath, xmlContent);
+    }
+  });
+
+  // Process main document body with docxtemplater
   const doc = new Docxtemplater(zip, {
     paragraphLoop: true,
     linebreaks: true,
     delimiters: { start: '«', end: '»' },
-    nullGetter: () => '___________', // blank line for any missing field
+    nullGetter: () => '___________',
   });
-
-  // Build merge data — map our JSON keys to template merge fields
-  const mergeData = {
-    Your_First_Name:                data.Your_First_Name || '',
-    Your_Last_Name:                 data.Your_Last_Name || '',
-    Your_Birth_Date:                data.Your_Birth_Date || '',
-    Your_Preferred_Signature_Name:  data.Your_Preferred_Signature_Name || '',
-    Your_Cell_Phone:                data.Your_Cell_Phone || '',
-    Your_Work_Phone_Number:         data.Your_Work_Phone_Number || 'N/A',
-    Address:                        data.Address || '',
-    City:                           data.City || '',
-    State:                          data.State || 'Utah',
-    Zip_Code:                       data.Zip_Code || '',
-    County:                         data.County || '',
-    Spouse_First_Name:              data.Spouse_First_Name || '',
-    Spouse_Birth_Date:              data.Spouse_Birth_Date || '',
-    Spouses_Preferred_Signature_Name: data.Spouses_Preferred_Signature_Name || '',
-    Spouse_Cell_Phone:              data.Spouse_Cell_Phone || '',
-    Spouse_Work_Phone_Number:       data.Spouse_Work_Phone_Number || 'N/A',
-    Full_Legal_Names_of_Children:   data.Full_Legal_Names_of_Children || 'None',
-    Name_of_Trust:                  data.Name_of_Trust || `${data.Your_Last_Name} Family Trust`,
-    NAME_OF_TRUST:                  data.Name_of_Trust || `${data.Your_Last_Name} Family Trust`, // single trust variant
-    First_Choice_Successor_Trustee: data.First_Choice_Successor_Trustee || '',
-    Second_Choice_Successor_Trustee: data.Second_Choice_Successor_Trustee || '',
-    'Second_Choice_Successor_Trustee_': data.Second_Choice_Successor_Trustee || '', // single trust variant
-    Alternate_Agent_Name:           data.Alternate_Agent_Name || '',
-    Alternate_Agent_Address:        data.Alternate_Agent_Address || '',
-    Alternate_Agent_City:           data.Alternate_Agent_City || '',
-    Alternate_Agent_State:          data.Alternate_Agent_State || '',
-    Alternate_Agent_Zip:            data.Alternate_Agent_Zip || '',
-    Alternate_Agent_Cell_Phone:     data.Alternate_Agent_Cell_Phone || '',
-    Alternate_Agent_Work_Phone:     data.Alternate_Agent_Work_Phone || 'N/A',
-  };
 
   doc.render(mergeData);
 
@@ -214,9 +240,12 @@ async function sendEmail(data, docBuffer, filename) {
   const emailBody = `
 New estate planning intake completed — ready for paralegal review.
 
+PACKAGE: ${data.Package || data.Trust_Type || 'Estate Plan'}
 CLIENT: ${clientName}
 TRUST TYPE: ${trustType}
 TRUST NAME: ${data.Name_of_Trust || ''}
+EMAIL: ${data.Client_Email || 'Not provided'}
+PHONE: ${data.Client_Phone || data.Your_Cell_Phone || 'Not provided'}
 SUBMITTED: ${submitted} (Mountain Time)
 
 SPOUSE: ${data.Spouse_First_Name ? `${data.Spouse_First_Name} ${data.Your_Last_Name}` : 'N/A'}
