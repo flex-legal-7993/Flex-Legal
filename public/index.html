@@ -589,6 +589,41 @@
   .pkg-continue-btn:disabled { background: var(--border); color: var(--text-light); cursor: not-allowed; transform: none; }
   .pkg-footer-note { font-size: 11px; color: var(--text-light); text-align: center; }
 
+  /* Back navigation */
+  .back-nav {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px 0;
+    width: fit-content;
+    transition: color 0.15s;
+    background: none;
+    border: none;
+    font-family: 'Source Sans 3', sans-serif;
+  }
+  .back-nav:hover { color: var(--navy); }
+  .back-nav svg { flex-shrink: 0; }
+
+  .start-over-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 10px 0;
+    width: fit-content;
+    transition: color 0.15s;
+    background: none;
+    border: none;
+    font-family: 'Source Sans 3', sans-serif;
+    margin: 0 auto;
+  }
+  .start-over-btn:hover { color: var(--navy); }
+
   /* Utility */
   .hidden { display: none !important; }
   
@@ -714,6 +749,10 @@
   <!-- Consent screen -->
   <div class="consent-screen hidden" id="consentScreen">
     <div class="consent-header">
+      <button class="back-nav" onclick="goBackToPackages()" style="color:rgba(255,255,255,0.7); margin-bottom:10px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        Back to package selection
+      </button>
       <div class="consent-header-eyebrow">Before You Begin</div>
       <div class="consent-header-title">Estate Planning Intake — Disclosure &amp; Consent</div>
     </div>
@@ -792,7 +831,10 @@
         <div class="chat-title-name">Flex Legal Intake</div>
         <div class="chat-title-sub">Estate Planning — Attorney-Directed</div>
       </div>
-      <div class="chat-status"></div>
+      <button class="back-nav" onclick="confirmStartOver()" title="Start over" style="margin-left:auto; gap:4px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
+        Start over
+      </button>
     </div>
 
     <div class="chat-messages" id="chatMessages"></div>
@@ -830,12 +872,73 @@
       <div class="next-row"><div class="next-num">3</div><div><div class="next-title">You'll receive a scheduling link</div><div class="next-desc">To book your document signing appointment</div></div></div>
     </div>
 
+    <button class="start-over-btn" onclick="confirmStartOver()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
+      Start a new intake
+    </button>
+
     <div class="priv-notice">Your intake was completed as part of an attorney-directed engagement with Flex Legal Services LLC and is protected under attorney-client privilege. This intake was conducted using AI technology operating under the supervision of Flex Legal Services Attorneys, pursuant to Utah Rules of Professional Conduct 1.1 and 5.3. Your information was transmitted using Anthropic's commercial API under enterprise data terms and is not used for AI training. Flex Legal Services LLC is licensed to practice law in Utah.</div>
   </div>
 
 </main>
 
 <script>
+// ─── Back navigation ─────────────────────────────────────────────────────────
+function goBackToPackages() {
+  // Hide consent, show package selection
+  document.getElementById('consentScreen').classList.add('hidden');
+  document.getElementById('pkgScreen').classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function confirmStartOver() {
+  if (conversationHistory.length > 1) {
+    if (!confirm('Are you sure you want to start over? Your current progress will be lost.')) return;
+  }
+  // Reset everything and go back to package selection
+  conversationHistory = [];
+  collectedData = {};
+  currentStage = 0;
+  selectedPackage = null;
+  clientInfo = {};
+
+  // Reset progress bar
+  const fill = document.getElementById('progressFill');
+  const label = document.getElementById('progressLabel');
+  const pct = document.getElementById('progressPct');
+  if (fill) fill.style.width = '0%';
+  if (label) label.textContent = 'Getting started';
+  if (pct) pct.textContent = '0%';
+
+  // Clear chat messages
+  const msgs = document.getElementById('chatMessages');
+  if (msgs) msgs.innerHTML = '';
+
+  // Reset form fields
+  const nameEl = document.getElementById('clientName');
+  const emailEl = document.getElementById('clientEmail');
+  const phoneEl = document.getElementById('clientPhone');
+  if (nameEl) nameEl.value = '';
+  if (emailEl) emailEl.value = '';
+  if (phoneEl) phoneEl.value = '';
+
+  // Deselect all package cards
+  document.querySelectorAll('.pkg-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('pkgContinueBtn').disabled = true;
+
+  // Hide all screens, show package selection
+  document.getElementById('confirmScreen').classList.remove('visible');
+  document.getElementById('chatCard').classList.add('hidden');
+  document.getElementById('progressWrap').classList.add('hidden');
+  document.getElementById('consentScreen').classList.add('hidden');
+  document.getElementById('pkgScreen').classList.remove('hidden');
+
+  // Re-enable input
+  setWaiting(false);
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 // ─── Package selection ────────────────────────────────────────────────────────
 let selectedPackage = null;
 let clientInfo = {};
