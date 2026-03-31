@@ -40,9 +40,10 @@ COLLECT THESE FIELDS in this exact order:
 8. Beneficiaries — deliver SECTION 4 and SECTION 5 scripts, collect beneficiary names and relationships. If any appear to be minors, deliver SECTION 6 script.
 9. Children: Full_Legal_Names_of_Children (comma-separated, or "None")
 10. Pour-over will — deliver SECTION 8 script (no data to collect)
-11. Financial POA — deliver SECTION 9 script (no data to collect for now — agent is typically spouse)
-12. Healthcare directive — deliver SECTION 10 script, then collect: Alternate_Agent_Name
-13. Backup healthcare agent — deliver SECTION 11 script, then collect: Alternate_Agent_Address, Alternate_Agent_City, Alternate_Agent_State, Alternate_Agent_Zip, Alternate_Agent_Cell_Phone, Alternate_Agent_Work_Phone
+11. Financial POA — deliver SECTION 9 script, then collect: HC_Primary_Agent_Name, HC_Primary_Agent_Address, HC_Primary_Agent_City, HC_Primary_Agent_State, HC_Primary_Agent_Zip, HC_Primary_Agent_Cell_Phone, HC_Primary_Agent_Work_Phone
+12. POA backup agent — deliver SECTION 9B script, then collect: POA_Backup_Agent_Name, POA_Backup_Agent_Address, POA_Backup_Agent_City, POA_Backup_Agent_State, POA_Backup_Agent_Zip, POA_Backup_Agent_Cell_Phone, POA_Backup_Agent_Work_Phone
+13. Healthcare directive — deliver SECTION 10 script, then collect: Alternate_Agent_Name, Alternate_Agent_Address, Alternate_Agent_City, Alternate_Agent_State, Alternate_Agent_Zip, Alternate_Agent_Cell_Phone, Alternate_Agent_Work_Phone
+14. Backup healthcare agent — deliver SECTION 11 script, then collect: HC_Backup_Agent_Name, HC_Backup_Agent_Address, HC_Backup_Agent_City, HC_Backup_Agent_State, HC_Backup_Agent_Zip, HC_Backup_Agent_Cell_Phone, HC_Backup_Agent_Work_Phone
 
 CONVERSATION RULES:
 1. Ask ONE question at a time — never multiple questions in one message
@@ -110,12 +111,15 @@ Your will also allows you to leave specific personal property to specific people
 
 No action needed from you right now — I just wanted you to understand what the will does and that it's included in your plan."
 
-SECTION 9 — Deliver after pour-over will explanation. No data to collect:
-"Your estate plan also includes a Financial Power of Attorney — sometimes called a Durable Power of Attorney. This is a separate document that gives someone the authority to handle your financial affairs if you become incapacitated — for example, if you're in an accident or have a serious illness and can't manage things yourself.
+SECTION 9 — Deliver before asking about Financial POA agent:
+"Your estate plan also includes a Financial Power of Attorney — sometimes called a Durable Power of Attorney. This gives someone the authority to handle your financial affairs if you become incapacitated — for example, if you're in an accident or have a serious illness and can't manage things yourself.
 
-This person — called your Agent — can pay your bills, manage your bank accounts, handle real estate, and take care of other financial matters on your behalf. They only have this authority if you're incapacitated — it doesn't give them any power over your trust assets, and it doesn't take effect until you need it.
+This person — called your Agent — can pay your bills, manage your bank accounts, handle real estate, and take care of other financial matters on your behalf. They only have this authority if you're incapacitated — it doesn't affect your trust assets, and it doesn't take effect until you need it.
 
-Most married couples name each other as their financial agent. Flex Legal Services Attorneys will confirm this and any other preferences at your signing appointment."
+Most married couples name each other as their financial agent. Would you like to name your spouse as your Financial Power of Attorney agent, or would you prefer to name someone else?"
+
+SECTION 9B — Deliver after client confirms or names POA agent, before asking for backup:
+"We also need to name a backup Financial Power of Attorney agent — someone who would step in if your primary agent is unable or unwilling to serve. Most people name their successor trustee as the backup, but you're welcome to choose anyone you trust. Who would you like as your backup POA agent?"
 
 SECTION 10 — Deliver before asking Alternate_Agent_Name:
 "The last document in your estate plan is your Healthcare Directive — this actually does two things.
@@ -128,13 +132,13 @@ Your healthcare agent should be someone who knows you well, lives reasonably nea
 
 Who would you like to name as your healthcare agent?"
 
-SECTION 11 — Deliver before asking for backup healthcare agent info:
-"We'll also name a backup healthcare agent in case your first choice is unavailable when needed. Who would you like as your alternate?"
+SECTION 11 — Deliver before asking for backup healthcare agent:
+"We'll also name a backup healthcare agent in case your primary agent is unable or unavailable when needed. This person steps in only if your primary agent can't serve. Who would you like as your backup healthcare agent?"
 
 EXAMPLE COMPLETION FORMAT:
 Thank you so much — that's everything we need. Our team will prepare your draft documents and be in touch within 1–2 business days. We look forward to helping protect your family.
 [INTAKE_COMPLETE]
-{"Trust_Type":"Joint Marital Trust","Your_First_Name":"James","Your_Last_Name":"Sullivan","Your_Birth_Date":"04/15/1978","Your_Preferred_Signature_Name":"James R. Sullivan","Your_Cell_Phone":"801-555-1234","Your_Work_Phone_Number":"N/A","Address":"123 Main St","City":"Provo","State":"Utah","Zip_Code":"84601","County":"Utah County","Spouse_First_Name":"Sarah","Spouse_Birth_Date":"07/22/1980","Spouses_Preferred_Signature_Name":"Sarah M. Sullivan","Spouse_Cell_Phone":"801-555-5678","Spouse_Work_Phone_Number":"N/A","Full_Legal_Names_of_Children":"Emma Grace Sullivan, Noah James Sullivan","Name_of_Trust":"Sullivan Family Trust","First_Choice_Successor_Trustee":"Michael Robert Sullivan","Second_Choice_Successor_Trustee":"Patricia Ann Jones","Alternate_Agent_Name":"Michael Robert Sullivan","Alternate_Agent_Address":"456 Oak Ave","Alternate_Agent_City":"Orem","Alternate_Agent_State":"Utah","Alternate_Agent_Zip":"84097","Alternate_Agent_Cell_Phone":"801-555-9999","Alternate_Agent_Work_Phone":"N/A"}`;
+{"Trust_Type":"Joint Marital Trust","Your_First_Name":"James","Your_Last_Name":"Sullivan","Your_Birth_Date":"04/15/1978","Your_Preferred_Signature_Name":"James R. Sullivan","Your_Cell_Phone":"801-555-1234","Your_Work_Phone_Number":"N/A","Address":"123 Main St","City":"Provo","State":"Utah","Zip_Code":"84601","County":"Utah County","Spouse_First_Name":"Sarah","Spouse_Birth_Date":"07/22/1980","Spouses_Preferred_Signature_Name":"Sarah M. Sullivan","Spouse_Cell_Phone":"801-555-5678","Spouse_Work_Phone_Number":"N/A","Full_Legal_Names_of_Children":"Emma Grace Sullivan, Noah James Sullivan","Name_of_Trust":"Sullivan Family Trust","First_Choice_Successor_Trustee":"Michael Robert Sullivan","Second_Choice_Successor_Trustee":"Patricia Ann Jones","HC_Primary_Agent_Name":"Sarah M. Sullivan","HC_Primary_Agent_Address":"123 Main St","HC_Primary_Agent_City":"Provo","HC_Primary_Agent_State":"Utah","HC_Primary_Agent_Zip":"84601","HC_Primary_Agent_Cell_Phone":"801-555-5678","HC_Primary_Agent_Work_Phone":"N/A","POA_Backup_Agent_Name":"Michael Robert Sullivan","POA_Backup_Agent_Address":"456 Oak Ave","POA_Backup_Agent_City":"Orem","POA_Backup_Agent_State":"Utah","POA_Backup_Agent_Zip":"84097","POA_Backup_Agent_Cell_Phone":"801-555-9999","POA_Backup_Agent_Work_Phone":"N/A","Alternate_Agent_Name":"Patricia Ann Jones","Alternate_Agent_Address":"789 Pine St","Alternate_Agent_City":"Lindon","Alternate_Agent_State":"Utah","Alternate_Agent_Zip":"84042","Alternate_Agent_Cell_Phone":"801-555-7777","Alternate_Agent_Work_Phone":"N/A","HC_Backup_Agent_Name":"Robert James Carter","HC_Backup_Agent_Address":"321 Elm St","HC_Backup_Agent_City":"Pleasant Grove","HC_Backup_Agent_State":"Utah","HC_Backup_Agent_Zip":"84062","HC_Backup_Agent_Cell_Phone":"801-555-4444","HC_Backup_Agent_Work_Phone":"N/A"}`;
 
 // ─── Route: Start conversation ────────────────────────────────────────────────
 app.post('/start', async (req, res) => {
@@ -197,8 +201,10 @@ app.post('/chat', async (req, res) => {
     res.json({ reply: replyText, complete: false });
 
   } catch (err) {
-    console.error('Chat error:', err);
-    res.status(500).json({ error: 'Chat failed' });
+    console.error('Chat error full:', JSON.stringify(err, null, 2));
+    console.error('Chat error message:', err.message);
+    console.error('Chat error status:', err.status);
+    res.status(500).json({ error: 'Chat failed', detail: err.message });
   }
 });
 
@@ -237,13 +243,35 @@ async function generateAndEmail(data) {
     First_Choice_Successor_Trustee:   data.First_Choice_Successor_Trustee || '',
     Second_Choice_Successor_Trustee:  data.Second_Choice_Successor_Trustee || '',
     'Second_Choice_Successor_Trustee_': data.Second_Choice_Successor_Trustee || '',
-    Alternate_Agent_Name:             data.Alternate_Agent_Name || '',
-    Alternate_Agent_Address:          data.Alternate_Agent_Address || '',
-    Alternate_Agent_City:             data.Alternate_Agent_City || '',
-    Alternate_Agent_State:            data.Alternate_Agent_State || '',
-    Alternate_Agent_Zip:              data.Alternate_Agent_Zip || '',
-    Alternate_Agent_Cell_Phone:       data.Alternate_Agent_Cell_Phone || '',
-    Alternate_Agent_Work_Phone:       data.Alternate_Agent_Work_Phone || 'N/A',
+    HC_Primary_Agent_Name:            data.HC_Primary_Agent_Name || '',
+    HC_Primary_Agent_Address:         data.HC_Primary_Agent_Address || '',
+    HC_Primary_Agent_City:            data.HC_Primary_Agent_City || '',
+    HC_Primary_Agent_State:           data.HC_Primary_Agent_State || '',
+    HC_Primary_Agent_Zip:             data.HC_Primary_Agent_Zip || '',
+    HC_Primary_Agent_Cell_Phone:      data.HC_Primary_Agent_Cell_Phone || '',
+    HC_Primary_Agent_Work_Phone:      data.HC_Primary_Agent_Work_Phone || 'N/A',
+    POA_Backup_Agent_Name:            data.POA_Backup_Agent_Name || '',
+    POA_Backup_Agent_Address:         data.POA_Backup_Agent_Address || '',
+    POA_Backup_Agent_City:            data.POA_Backup_Agent_City || '',
+    POA_Backup_Agent_State:           data.POA_Backup_Agent_State || '',
+    POA_Backup_Agent_Zip:             data.POA_Backup_Agent_Zip || '',
+    POA_Backup_Agent_Cell_Phone:      data.POA_Backup_Agent_Cell_Phone || '',
+    POA_Backup_Agent_Work_Phone:      data.POA_Backup_Agent_Work_Phone || 'N/A',
+    // Backup HCD agent maps to Alternate_Agent fields in template
+    Alternate_Agent_Name:             data.HC_Backup_Agent_Name || data.Alternate_Agent_Name || '',
+    Alternate_Agent_Address:          data.HC_Backup_Agent_Address || data.Alternate_Agent_Address || '',
+    Alternate_Agent_City:             data.HC_Backup_Agent_City || data.Alternate_Agent_City || '',
+    Alternate_Agent_State:            data.HC_Backup_Agent_State || data.Alternate_Agent_State || '',
+    Alternate_Agent_Zip:              data.HC_Backup_Agent_Zip || data.Alternate_Agent_Zip || '',
+    Alternate_Agent_Cell_Phone:       data.HC_Backup_Agent_Cell_Phone || data.Alternate_Agent_Cell_Phone || '',
+    Alternate_Agent_Work_Phone:       data.HC_Backup_Agent_Work_Phone || data.Alternate_Agent_Work_Phone || 'N/A',
+    HC_Backup_Agent_Name:             data.HC_Backup_Agent_Name || '',
+    HC_Backup_Agent_Address:          data.HC_Backup_Agent_Address || '',
+    HC_Backup_Agent_City:             data.HC_Backup_Agent_City || '',
+    HC_Backup_Agent_State:            data.HC_Backup_Agent_State || '',
+    HC_Backup_Agent_Zip:              data.HC_Backup_Agent_Zip || '',
+    HC_Backup_Agent_Cell_Phone:       data.HC_Backup_Agent_Cell_Phone || '',
+    HC_Backup_Agent_Work_Phone:       data.HC_Backup_Agent_Work_Phone || 'N/A',
   };
 
   // Load template
@@ -314,7 +342,10 @@ SPOUSE: ${data.Spouse_First_Name ? `${data.Spouse_First_Name} ${data.Your_Last_N
 CHILDREN: ${data.Full_Legal_Names_of_Children || 'None listed'}
 SUCCESSOR TRUSTEE 1: ${data.First_Choice_Successor_Trustee || ''}
 SUCCESSOR TRUSTEE 2: ${data.Second_Choice_Successor_Trustee || ''}
-HEALTHCARE AGENT: ${data.Alternate_Agent_Name || ''}
+POA AGENT: ${data.HC_Primary_Agent_Name || data.Spouses_Preferred_Signature_Name || 'Spouse'}
+POA BACKUP AGENT: ${data.POA_Backup_Agent_Name || ''}
+HEALTHCARE AGENT (Primary): ${data.Alternate_Agent_Name || ''}
+HEALTHCARE AGENT (Backup): ${data.HC_Backup_Agent_Name || ''}
 
 ADDRESS: ${data.Address || ''}, ${data.City || ''}, ${data.State || ''} ${data.Zip_Code || ''}
 CLIENT PHONE: ${data.Your_Cell_Phone || ''}
