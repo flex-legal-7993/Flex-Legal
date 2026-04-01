@@ -164,47 +164,82 @@ app.post('/start', async (req, res) => {
   }
 });
 
-// ─── Route: Continue conversation ────────────────────────────────────────────
+// ─── Route: Continue conversation (streaming) ────────────────────────────────
 app.post('/chat', async (req, res) => {
   try {
     const { messages } = req.body;
 
-    const response = await anthropic.messages.create({
+    // Set headers for Server-Sent Events streaming
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.flushHeaders();
+
+    let fullText = '';
+
+    const stream = anthropic.messages.stream({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 2048,
       system: SYSTEM_PROMPT,
       messages: messages
     });
 
-    const replyText = response.content[0].text;
+    stream.on('text', (text) => {
+      fullText += text;
+      // Send each token chunk to client
+      res.write(`data: ${JSON.stringify({ token: text })}
 
-    // Check if intake is complete
-    if (replyText.includes('[INTAKE_COMPLETE]')) {
-      const parts = replyText.split('[INTAKE_COMPLETE]');
-      const closingMessage = parts[0].trim();
-      const jsonStr = parts[1].trim();
+`);
+    });
 
-      let intakeData;
-      try {
-        intakeData = JSON.parse(jsonStr);
-      } catch (e) {
-        console.error('Failed to parse intake JSON:', jsonStr);
-        return res.json({ reply: closingMessage, complete: false });
+    stream.on('finalMessage', async () => {
+      // Check if intake is complete
+      if (fullText.includes('[INTAKE_COMPLETE]')) {
+        const parts = fullText.split('[INTAKE_COMPLETE]');
+        const closingMessage = parts[0].trim();
+        const jsonStr = parts[1].trim();
+
+        let intakeData;
+        try {
+          intakeData = JSON.parse(jsonStr);
+        } catch (e) {
+          console.error('Failed to parse intake JSON:', jsonStr);
+          res.write(`data: ${JSON.stringify({ done: true, complete: false, reply: closingMessage })}
+
+`);
+          res.end();
+          return;
+        }
+
+        // Fire off document generation and email
+        generateAndEmail(intakeData).catch(err => console.error('Doc gen error:', err));
+
+        res.write(`data: ${JSON.stringify({ done: true, complete: true, reply: closingMessage, intakeData })}
+
+`);
+      } else {
+        res.write(`data: ${JSON.stringify({ done: true, complete: false, reply: fullText })}
+
+`);
       }
+      res.end();
+    });
 
-      // Fire off document generation and email (don't await — let client see confirmation)
-      generateAndEmail(intakeData).catch(err => console.error('Doc gen error:', err));
+    stream.on('error', (err) => {
+      console.error('Stream error:', err.message);
+      res.write(`data: ${JSON.stringify({ error: 'Stream failed' })}
 
-      return res.json({ reply: closingMessage, complete: true, intakeData });
-    }
-
-    res.json({ reply: replyText, complete: false });
+`);
+      res.end();
+    });
 
   } catch (err) {
-    console.error('Chat error full:', JSON.stringify(err, null, 2));
-    console.error('Chat error message:', err.message);
-    console.error('Chat error status:', err.status);
-    res.status(500).json({ error: 'Chat failed', detail: err.message });
+    console.error('Chat error:', err.message);
+    res.write(`data: ${JSON.stringify({ error: 'Chat failed' })}
+
+`);
+    res.end();
   }
 });
 
