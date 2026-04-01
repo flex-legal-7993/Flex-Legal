@@ -1,413 +1,1298 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// Flex Legal Services — Estate Planning Intake Backend
-// ─────────────────────────────────────────────────────────────────────────────
-
-const express  = require('express');
-const cors     = require('cors');
-const Anthropic = require('@anthropic-ai/sdk');
-const nodemailer = require('nodemailer');
-const PizZip  = require('pizzip');
-const Docxtemplater = require('docxtemplater');
-const fs       = require('fs');
-const path     = require('path');
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
-
-// ─── Config from environment variables ───────────────────────────────────────
-const ANTHROPIC_API_KEY  = process.env.ANTHROPIC_API_KEY;
-const GMAIL_USER         = process.env.GMAIL_USER;         // e.g. paralegal@flexlegalteam.com
-const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD; // Gmail App Password
-const NOTIFY_EMAIL       = process.env.NOTIFY_EMAIL;       // where to send completed intakes
-
-const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
-
-// ─── System prompt ────────────────────────────────────────────────────────────
-const SYSTEM_PROMPT = `You are the estate planning intake assistant for Flex Legal Services LLC, a Utah law firm. Your job is to have a warm, professional conversation with clients to collect all information needed to prepare their estate planning documents.
-
-You are conducting an attorney-directed intake on behalf of Flex Legal Services Attorneys. Everything collected is protected under attorney-client privilege.
-
-COLLECT THESE FIELDS in this exact order:
-1. Personal info: Your_First_Name, Your_Last_Name, Your_Birth_Date, Your_Preferred_Signature_Name, Your_Cell_Phone, Your_Work_Phone_Number
-2. Address: Address, City, State (default Utah), Zip_Code, County
-3. Spouse info (joint trust only): Spouse_First_Name, Spouse_Birth_Date, Spouses_Preferred_Signature_Name, Spouse_Cell_Phone, Spouse_Work_Phone_Number
-4. Trust explanation — deliver SECTION 1 script (see below)
-5. Trust name: Name_of_Trust (always "[Last Name] Family Trust" — confirm with client)
-6. Successor trustees — deliver SECTION 2 script, then collect: First_Choice_Successor_Trustee
-7. Backup trustee — deliver SECTION 3 script, then collect: Second_Choice_Successor_Trustee
-8. Beneficiaries — deliver SECTION 4 and SECTION 5 scripts, collect beneficiary names and relationships. If any appear to be minors, deliver SECTION 6 script.
-9. Children: Full_Legal_Names_of_Children (comma-separated, or "None")
-10. Pour-over will — deliver SECTION 8 script (no data to collect)
-11. Financial POA — deliver SECTION 9 script, then collect: HC_Primary_Agent_Name, HC_Primary_Agent_Address, HC_Primary_Agent_City, HC_Primary_Agent_State, HC_Primary_Agent_Zip, HC_Primary_Agent_Cell_Phone, HC_Primary_Agent_Work_Phone
-12. POA backup agent — deliver SECTION 9B script, then collect: POA_Backup_Agent_Name, POA_Backup_Agent_Address, POA_Backup_Agent_City, POA_Backup_Agent_State, POA_Backup_Agent_Zip, POA_Backup_Agent_Cell_Phone, POA_Backup_Agent_Work_Phone
-13. Healthcare directive — deliver SECTION 10 script, then collect: Alternate_Agent_Name, Alternate_Agent_Address, Alternate_Agent_City, Alternate_Agent_State, Alternate_Agent_Zip, Alternate_Agent_Cell_Phone, Alternate_Agent_Work_Phone
-14. Backup healthcare agent — deliver SECTION 11 script, then collect: HC_Backup_Agent_Name, HC_Backup_Agent_Address, HC_Backup_Agent_City, HC_Backup_Agent_State, HC_Backup_Agent_Zip, HC_Backup_Agent_Cell_Phone, HC_Backup_Agent_Work_Phone
-
-CONVERSATION RULES:
-1. Ask ONE question at a time — never multiple questions in one message
-2. Be warm, clear, and reassuring — many clients are nervous about estate planning
-3. After collecting a name, use it naturally in follow-up messages
-4. Deliver each script section exactly as written before asking the related question
-5. Never give legal advice — if they ask legal questions, say "Flex Legal Services Attorneys will review everything and can answer that at your signing appointment"
-6. Keep all explanations friendly and plain — no legal jargon beyond what is in the scripts
-7. If a client asks what something means, refer to the relevant script section explanation
-8. When you have collected ALL fields, write a final warm closing message, then on a new line write exactly: [INTAKE_COMPLETE] followed by a JSON object with all collected fields
-
-SCRIPTS — deliver these at the appropriate points in the conversation:
-
-SECTION 1 — Deliver after collecting address info, before asking about trust name:
-"Before I ask about the specific people in your estate plan, let me explain how your documents work together — it'll make the next few questions much easier to answer.
-
-As a married couple, you will both be Trustors — meaning you're the ones creating the trust and deciding what goes into it. You're also both Trustees — meaning you're the ones managing and controlling everything in the trust right now. And you're both Beneficiaries — meaning you both benefit from the trust during your lifetimes. So right now, you wear all three hats, and nothing changes about how you handle your money or property. You stay in complete control.
-
-When the first spouse passes away, that person becomes the Deceased Trustor and the surviving spouse becomes the Surviving Trustor. The surviving spouse remains in complete control of the entire trust — they can still amend it, withdraw from it, and manage it exactly as before. Nothing is locked down at that point.
-
-It's only after both of you have passed away that your Successor Trustee steps in — and we'll talk about that person in just a moment.
-
-Does that make sense so far?"
-
-SECTION 2 — Deliver before asking First_Choice_Successor_Trustee:
-"Now I need to ask about your Successor Trustee. This person plays three important roles in your estate plan:
-
-First, as Successor Trustee — after both of you have passed away, they step in to manage and distribute your trust assets to your beneficiaries according to your instructions.
-
-Second, as Personal Representative — they are also named as the executor of your wills, responsible for handling any final matters outside the trust.
-
-Third, as Guardian — if you have minor children at the time of your passing, this person would be appointed by a court to raise and care for them.
-
-This is one of the most important decisions in your estate plan. Your successor trustee should be someone you deeply trust — typically an adult child, sibling, or close friend — who is organized, honest, and capable of handling both financial and personal responsibilities.
-
-They have no power or access to anything while you're both alive. They only step in when needed.
-
-Who would you like to name as your first choice?"
-
-SECTION 3 — Deliver before asking Second_Choice_Successor_Trustee:
-"We also need a backup successor trustee — someone who would step into all three of those same roles if your first choice is unable or unwilling to serve. Who would you like as your alternate?"
-
-SECTION 4 — Deliver before asking about beneficiaries:
-"Now let's talk about your beneficiaries — the people who will actually receive your assets after you're both gone.
-
-Your beneficiaries can be anyone you choose: your children, other family members, close friends, or even a charity. Most couples name their children as their primary beneficiaries, with assets split equally among them. But you're free to designate anyone, or split things however you'd like.
-
-Who would you like to name as your beneficiaries?"
-
-SECTION 5 — Deliver immediately after Section 4 to collect beneficiary details:
-"For each beneficiary I'll need their full legal name and their relationship to you — for example, 'Emma Grace Sullivan, daughter' or 'Robert James Carter, brother.' Unless you tell me otherwise, I'll assume equal distribution among all beneficiaries. Please list everyone you'd like to include."
-
-SECTION 6 — Deliver only if any beneficiary appears to be a minor:
-"Just so you know — if any of your beneficiaries are minors when you pass away, your successor trustee will manage their share of the trust on their behalf until they reach adulthood. Flex Legal Services Attorneys will discuss the specific age for distributions at your signing appointment."
-
-SECTION 7 — Deliver before asking Full_Legal_Names_of_Children:
-"And what are the full legal names of your children as they should appear in the documents? If you have no children, just let me know."
-
-SECTION 8 — Deliver after children's names, before Financial POA. No data to collect:
-"Your estate plan also includes a Last Will and Testament — but it works a little differently than what most people think of when they hear the word 'will.'
-
-Because you have a living trust, your will is called a Pour-Over Will. Its primary job is to capture anything you own at the time of your death that wasn't transferred into your trust, and pour it over into the trust so it gets distributed according to your trust instructions.
-
-Your will also allows you to leave specific personal property to specific people — for example, a piece of jewelry to a daughter, or a collection to a friend. You don't need to make those decisions today — Flex Legal Services Attorneys will review the will with you at your signing appointment and you can provide that information then.
-
-No action needed from you right now — I just wanted you to understand what the will does and that it's included in your plan."
-
-SECTION 9 — Deliver before asking about Financial POA agent:
-"Your estate plan also includes a Financial Power of Attorney — sometimes called a Durable Power of Attorney. This gives someone the authority to handle your financial affairs if you become incapacitated — for example, if you're in an accident or have a serious illness and can't manage things yourself.
-
-This person — called your Agent — can pay your bills, manage your bank accounts, handle real estate, and take care of other financial matters on your behalf. They only have this authority if you're incapacitated — it doesn't affect your trust assets, and it doesn't take effect until you need it.
-
-Most married couples name each other as their financial agent. Would you like to name your spouse as your Financial Power of Attorney agent, or would you prefer to name someone else?"
-
-SECTION 9B — Deliver after client confirms or names POA agent, before asking for backup:
-"We also need to name a backup Financial Power of Attorney agent — someone who would step in if your primary agent is unable or unwilling to serve. Most people name their successor trustee as the backup, but you're welcome to choose anyone you trust. Who would you like as your backup POA agent?"
-
-SECTION 10 — Deliver before asking Alternate_Agent_Name:
-"The last document in your estate plan is your Healthcare Directive — this actually does two things.
-
-First, it lets you name a Healthcare Agent — someone who can make medical decisions on your behalf if you're ever unable to speak for yourself. This could be a serious accident, surgery, or illness. Your agent would communicate with doctors and make treatment decisions based on your wishes.
-
-Second, it includes your Living Will — where you can state your wishes about end-of-life care, such as whether you want heroic measures taken to keep you alive if there's no reasonable chance of recovery. Flex Legal Services Attorneys will go through those specific wishes with you at your signing appointment.
-
-Your healthcare agent should be someone who knows you well, lives reasonably nearby, and can handle difficult conversations calmly. Many people choose their spouse, an adult child, or a close trusted friend.
-
-Who would you like to name as your healthcare agent?"
-
-SECTION 11 — Deliver before asking for backup healthcare agent:
-"We'll also name a backup healthcare agent in case your primary agent is unable or unavailable when needed. This person steps in only if your primary agent can't serve. Who would you like as your backup healthcare agent?"
-
-EXAMPLE COMPLETION FORMAT:
-Thank you so much — that's everything we need. Our team will prepare your draft documents and be in touch within 1–2 business days. We look forward to helping protect your family.
-[INTAKE_COMPLETE]
-{"Trust_Type":"Joint Marital Trust","Your_First_Name":"James","Your_Last_Name":"Sullivan","Your_Birth_Date":"04/15/1978","Your_Preferred_Signature_Name":"James R. Sullivan","Your_Cell_Phone":"801-555-1234","Your_Work_Phone_Number":"N/A","Address":"123 Main St","City":"Provo","State":"Utah","Zip_Code":"84601","County":"Utah County","Spouse_First_Name":"Sarah","Spouse_Birth_Date":"07/22/1980","Spouses_Preferred_Signature_Name":"Sarah M. Sullivan","Spouse_Cell_Phone":"801-555-5678","Spouse_Work_Phone_Number":"N/A","Full_Legal_Names_of_Children":"Emma Grace Sullivan, Noah James Sullivan","Name_of_Trust":"Sullivan Family Trust","First_Choice_Successor_Trustee":"Michael Robert Sullivan","Second_Choice_Successor_Trustee":"Patricia Ann Jones","HC_Primary_Agent_Name":"Sarah M. Sullivan","HC_Primary_Agent_Address":"123 Main St","HC_Primary_Agent_City":"Provo","HC_Primary_Agent_State":"Utah","HC_Primary_Agent_Zip":"84601","HC_Primary_Agent_Cell_Phone":"801-555-5678","HC_Primary_Agent_Work_Phone":"N/A","POA_Backup_Agent_Name":"Michael Robert Sullivan","POA_Backup_Agent_Address":"456 Oak Ave","POA_Backup_Agent_City":"Orem","POA_Backup_Agent_State":"Utah","POA_Backup_Agent_Zip":"84097","POA_Backup_Agent_Cell_Phone":"801-555-9999","POA_Backup_Agent_Work_Phone":"N/A","Alternate_Agent_Name":"Patricia Ann Jones","Alternate_Agent_Address":"789 Pine St","Alternate_Agent_City":"Lindon","Alternate_Agent_State":"Utah","Alternate_Agent_Zip":"84042","Alternate_Agent_Cell_Phone":"801-555-7777","Alternate_Agent_Work_Phone":"N/A","HC_Backup_Agent_Name":"Robert James Carter","HC_Backup_Agent_Address":"321 Elm St","HC_Backup_Agent_City":"Pleasant Grove","HC_Backup_Agent_State":"Utah","HC_Backup_Agent_Zip":"84062","HC_Backup_Agent_Cell_Phone":"801-555-4444","HC_Backup_Agent_Work_Phone":"N/A"}`;
-
-// ─── Route: Start conversation ────────────────────────────────────────────────
-app.post('/start', async (req, res) => {
-  try {
-    const { clientInfo, selectedPackage } = req.body || {};
-    const firstName = clientInfo && clientInfo.name ? clientInfo.name.split(' ')[0] : '';
-    const pkg = selectedPackage || 'estate planning';
-
-    const openingMsg = firstName
-      ? `Hello, my name is ${clientInfo.name}. I selected the "${pkg}" package and would like to get started.`
-      : `Hello, I would like to get started with my estate planning.`;
-
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 2048,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: openingMsg }]
-    });
-    res.json({ reply: response.content[0].text });
-  } catch (err) {
-    console.error('Start error:', err);
-    res.status(500).json({ error: 'Failed to start conversation' });
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Estate Planning Intake — Flex Legal Services</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=Source+Sans+3:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0F3D6B;
+    --navy-dark: #082a4d;
+    --navy-light: #1a5490;
+    --gold: #C9A84C;
+    --gold-light: #e8d5a3;
+    --gold-dark: #a8863a;
+    --cream: #FAF8F4;
+    --cream-dark: #F0EDE6;
+    --text: #1a1a1a;
+    --text-muted: #6b6560;
+    --text-light: #9a948e;
+    --border: #ddd8d0;
+    --white: #ffffff;
+    --success: #1a6b4a;
+    --success-bg: #e8f5ee;
   }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Source Sans 3', sans-serif;
+    background: var(--cream);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header */
+  .site-header {
+    background: var(--navy);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 2px solid var(--gold);
+  }
+  .header-logo {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    color: var(--white);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+  .header-logo span { color: var(--gold); }
+  .header-tag {
+    font-size: 12px;
+    color: var(--gold-light);
+    font-weight: 300;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* Main layout */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    max-width: 680px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 28px 20px 40px;
+  }
+
+  /* Intro card */
+  .intro-card {
+    background: var(--navy);
+    border-radius: 14px;
+    padding: 24px 26px;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .intro-card::before {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 120px; height: 120px;
+    background: radial-gradient(circle, rgba(201,168,76,0.15) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .intro-eyebrow {
+    font-size: 11px;
+    color: var(--gold);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .intro-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    color: var(--white);
+    font-weight: 500;
+    margin-bottom: 10px;
+    line-height: 1.3;
+  }
+  .intro-body {
+    font-size: 14px;
+    color: rgba(255,255,255,0.75);
+    line-height: 1.6;
+  }
+  .intro-meta {
+    display: flex;
+    gap: 18px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255,255,255,0.12);
+  }
+  .intro-meta-item {
+    font-size: 12px;
+    color: var(--gold-light);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .intro-meta-item svg { opacity: 0.8; }
+
+  /* Progress */
+  .progress-wrap {
+    margin-bottom: 16px;
+  }
+  .progress-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+  .progress-bar {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--navy), var(--gold));
+    border-radius: 2px;
+    transition: width 0.5s ease;
+  }
+
+  /* Chat window */
+  .chat-card {
+    background: var(--white);
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .chat-titlebar {
+    background: var(--cream-dark);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .chat-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--navy);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .chat-avatar svg { display: block; }
+  .chat-title-text { flex: 1; }
+  .chat-title-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    font-family: 'Playfair Display', serif;
+  }
+  .chat-title-sub { font-size: 11px; color: var(--text-muted); }
+  .chat-status {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #2ecc71;
+    box-shadow: 0 0 0 2px rgba(46,204,113,0.2);
+  }
+
+  .chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 340px;
+    max-height: 440px;
+  }
+
+  .msg { display: flex; gap: 8px; align-items: flex-end; }
+  .msg-bot { flex-direction: row; }
+  .msg-user { flex-direction: row-reverse; }
+
+  .msg-av-bot {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--navy);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    font-size: 10px; font-weight: 700; color: var(--gold);
+    font-family: 'Playfair Display', serif;
+  }
+  .msg-av-usr {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--gold-light);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    font-size: 10px; font-weight: 700; color: var(--navy);
+  }
+
+  .bubble-bot {
+    background: var(--cream);
+    border: 1px solid var(--border);
+    border-radius: 4px 14px 14px 14px;
+    padding: 10px 14px;
+    font-size: 14px;
+    color: var(--text);
+    line-height: 1.55;
+    max-width: 82%;
+  }
+  .bubble-usr {
+    background: var(--navy);
+    border-radius: 14px 4px 14px 14px;
+    padding: 10px 14px;
+    font-size: 14px;
+    color: var(--white);
+    line-height: 1.55;
+    max-width: 82%;
+  }
+
+  /* Typing indicator */
+  .typing-wrap { display: flex; gap: 8px; align-items: flex-end; }
+  .typing-bubble {
+    background: var(--cream);
+    border: 1px solid var(--border);
+    border-radius: 4px 14px 14px 14px;
+    padding: 12px 16px;
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+  .typing-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--navy);
+    animation: typingPulse 1.2s ease-in-out infinite;
+  }
+  .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes typingPulse {
+    0%, 60%, 100% { opacity: 0.25; transform: scale(0.9); }
+    30% { opacity: 1; transform: scale(1.1); }
+  }
+
+  /* Input area */
+  .chat-input-area {
+    padding: 14px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--white);
+  }
+  .input-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .chat-input {
+    flex: 1;
+    padding: 10px 14px;
+    font-size: 14px;
+    font-family: 'Source Sans 3', sans-serif;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    outline: none;
+    color: var(--text);
+    background: var(--cream);
+    transition: border-color 0.2s;
+  }
+  .chat-input:focus { border-color: var(--navy); background: var(--white); }
+  .chat-input:disabled { opacity: 0.5; cursor: not-allowed; }
+  .send-btn {
+    width: 40px; height: 40px;
+    border-radius: 8px;
+    background: var(--navy);
+    border: none;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.2s, transform 0.1s;
+  }
+  .send-btn:hover { background: var(--navy-light); }
+  .send-btn:active { transform: scale(0.95); }
+  .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .chat-footer-note {
+    font-size: 11px;
+    color: var(--text-light);
+    text-align: center;
+    margin-top: 10px;
+    line-height: 1.5;
+  }
+
+  /* Confirmation screen */
+  .confirm-screen {
+    display: none;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .confirm-screen.visible { display: flex; }
+
+  .confirm-hero {
+    background: var(--navy);
+    border-radius: 14px;
+    padding: 28px 24px;
+    text-align: center;
+  }
+  .confirm-check {
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: rgba(201,168,76,0.2);
+    border: 2px solid var(--gold);
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 14px;
+  }
+  .confirm-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    color: var(--white);
+    font-weight: 500;
+    margin-bottom: 8px;
+  }
+  .confirm-body {
+    font-size: 14px;
+    color: rgba(255,255,255,0.7);
+    line-height: 1.6;
+  }
+
+  .summary-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .summary-header {
+    padding: 14px 18px;
+    background: var(--cream-dark);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--cream-dark);
+    font-size: 13px;
+    gap: 12px;
+  }
+  .summary-row:last-child { border-bottom: none; }
+  .sum-label { color: var(--text-muted); flex-shrink: 0; }
+  .sum-val { color: var(--text); font-weight: 500; text-align: right; }
+
+  .next-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .next-header {
+    padding: 14px 18px;
+    background: var(--cream-dark);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .next-row {
+    display: flex;
+    gap: 12px;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--cream-dark);
+    align-items: flex-start;
+  }
+  .next-row:last-child { border-bottom: none; }
+  .next-num {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--navy);
+    color: var(--gold);
+    font-size: 11px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .next-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+  .next-desc { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+
+  .priv-notice {
+    background: var(--success-bg);
+    border: 1px solid rgba(26,107,74,0.2);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 12px;
+    color: var(--success);
+    line-height: 1.6;
+    text-align: center;
+  }
+
+  /* Consent screen */
+  .consent-screen {
+    background: var(--white);
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    margin-bottom: 16px;
+  }
+  .consent-header {
+    background: var(--navy);
+    padding: 20px 24px;
+    border-bottom: 2px solid var(--gold);
+  }
+  .consent-header-eyebrow {
+    font-size: 11px;
+    color: var(--gold);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .consent-header-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    color: var(--white);
+    font-weight: 500;
+  }
+  .consent-body {
+    padding: 22px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .consent-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--navy);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 5px;
+  }
+  .consent-section-text {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.65;
+  }
+  .consent-divider {
+    height: 1px;
+    background: var(--cream-dark);
+  }
+  .consent-agree-row {
+    background: var(--cream);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .consent-checkbox {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--navy);
+    border-radius: 4px;
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-top: 1px;
+    appearance: none;
+    -webkit-appearance: none;
+    background: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .consent-checkbox:checked {
+    background: var(--navy);
+    border-color: var(--navy);
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3 8l4 4 6-7' stroke='%23C9A84C' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 14px;
+  }
+  .consent-agree-text {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.55;
+    font-weight: 500;
+  }
+  .consent-btn {
+    width: 100%;
+    padding: 13px;
+    background: var(--navy);
+    color: var(--white);
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'Source Sans 3', sans-serif;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    letter-spacing: 0.02em;
+  }
+  .consent-btn:hover { background: var(--navy-light); }
+  .consent-btn:active { transform: scale(0.99); }
+  .consent-btn:disabled {
+    background: var(--border);
+    color: var(--text-light);
+    cursor: not-allowed;
+    transform: none;
+  }
+  .consent-timestamp {
+    font-size: 11px;
+    color: var(--text-light);
+    text-align: center;
+  }
+
+  /* Package selection screen */
+  .pkg-screen { display: flex; flex-direction: column; gap: 16px; }
+  .pkg-screen.hidden { display: none !important; }
+  .pkg-hero { background: var(--navy); border-radius: 14px; padding: 24px 26px; position: relative; overflow: hidden; }
+  .pkg-hero::before { content: ''; position: absolute; top: 0; right: 0; width: 120px; height: 120px; background: radial-gradient(circle, rgba(201,168,76,0.15) 0%, transparent 70%); pointer-events: none; }
+  .pkg-hero-eyebrow { font-size: 11px; color: var(--gold); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; margin-bottom: 8px; }
+  .pkg-hero-title { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--white); font-weight: 500; margin-bottom: 8px; line-height: 1.3; }
+  .pkg-hero-body { font-size: 14px; color: rgba(255,255,255,0.75); line-height: 1.6; }
+  .pkg-section-label { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; padding: 0 2px; }
+  .pkg-grid { display: flex; flex-direction: column; gap: 10px; }
+  .pkg-card { background: var(--white); border: 2px solid var(--border); border-radius: 12px; padding: 16px 18px; cursor: pointer; display: flex; align-items: flex-start; gap: 14px; transition: border-color 0.15s, box-shadow 0.15s; }
+  .pkg-card:hover { border-color: var(--navy-light); box-shadow: 0 2px 8px rgba(15,61,107,0.08); }
+  .pkg-card.selected { border-color: var(--navy); box-shadow: 0 2px 12px rgba(15,61,107,0.12); }
+  .pkg-radio { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border); flex-shrink: 0; margin-top: 2px; display: flex; align-items: center; justify-content: center; transition: border-color 0.15s, background 0.15s; }
+  .pkg-card.selected .pkg-radio { border-color: var(--navy); background: var(--navy); }
+  .pkg-radio-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--white); opacity: 0; transition: opacity 0.15s; }
+  .pkg-card.selected .pkg-radio-dot { opacity: 1; }
+  .pkg-card-content { flex: 1; }
+  .pkg-card-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; font-family: 'Playfair Display', serif; }
+  .pkg-card.selected .pkg-card-title { color: var(--navy); }
+  .pkg-card-desc { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+  .pkg-card-includes { font-size: 11px; color: var(--text-light); margin-top: 6px; line-height: 1.5; }
+  .contact-form-card { background: var(--white); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+  .contact-form-header { padding: 14px 18px; background: var(--cream-dark); border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .contact-form-body { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+  .form-field { display: flex; flex-direction: column; gap: 5px; }
+  .form-label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .form-input { padding: 10px 14px; font-size: 14px; font-family: 'Source Sans 3', sans-serif; border: 1px solid var(--border); border-radius: 8px; outline: none; color: var(--text); background: var(--cream); transition: border-color 0.2s, background 0.2s; }
+  .form-input:focus { border-color: var(--navy); background: var(--white); }
+  .form-input.error { border-color: #e74c3c; }
+  .form-error-msg { font-size: 11px; color: #e74c3c; display: none; }
+  .form-error-msg.visible { display: block; }
+  .pkg-continue-btn { width: 100%; padding: 13px; background: var(--navy); color: var(--white); border: none; border-radius: 8px; font-size: 14px; font-weight: 600; font-family: 'Source Sans 3', sans-serif; cursor: pointer; transition: background 0.2s, transform 0.1s; letter-spacing: 0.02em; }
+  .pkg-continue-btn:hover { background: var(--navy-light); }
+  .pkg-continue-btn:active { transform: scale(0.99); }
+  .pkg-continue-btn:disabled { background: var(--border); color: var(--text-light); cursor: not-allowed; transform: none; }
+  .pkg-footer-note { font-size: 11px; color: var(--text-light); text-align: center; }
+
+  /* Back navigation */
+  .back-nav {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px 0;
+    width: fit-content;
+    transition: color 0.15s;
+    background: none;
+    border: none;
+    font-family: 'Source Sans 3', sans-serif;
+  }
+  .back-nav:hover { color: var(--navy); }
+  .back-nav svg { flex-shrink: 0; }
+
+  .start-over-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 10px 0;
+    width: fit-content;
+    transition: color 0.15s;
+    background: none;
+    border: none;
+    font-family: 'Source Sans 3', sans-serif;
+    margin: 0 auto;
+  }
+  .start-over-btn:hover { color: var(--navy); }
+
+  /* Utility */
+  .hidden { display: none !important; }
+  
+  /* Error */
+  .error-bubble {
+    background: #fff0f0;
+    border: 1px solid #ffcccc;
+    border-radius: 4px 14px 14px 14px;
+    padding: 10px 14px;
+    font-size: 14px;
+    color: #c0392b;
+    line-height: 1.55;
+    max-width: 82%;
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-logo">Flex <span>Legal</span> Services</div>
+  <div class="header-tag">Estate Planning Intake</div>
+</header>
+
+<main class="main">
+
+  <!-- Intro card (hidden — replaced by package selection screen) -->
+  <div class="intro-card hidden" id="introCard">
+    <div class="intro-eyebrow">Confidential &amp; Secure</div>
+    <div class="intro-title">Your Estate Plan Starts Here</div>
+    <div class="intro-body">Answer a few questions and our team will prepare your personalized estate planning documents — attorney-reviewed within 1–2 business days.</div>
+    <div class="intro-meta">
+      <div class="intro-meta-item">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        About 10 minutes
+      </div>
+      <div class="intro-meta-item">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Attorney-client privilege protected
+      </div>
+      <div class="intro-meta-item">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13.5 19.79 19.79 0 0 1 1.61 4.93 2 2 0 0 1 3.59 3h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 10.5a16 16 0 0 0 6 6l.92-.92a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.72 18z"/></svg>
+        Utah licensed
+      </div>
+    </div>
+  </div>
+
+  <!-- Package selection screen -->
+  <div class="pkg-screen" id="pkgScreen">
+
+    <div class="pkg-hero">
+      <div class="pkg-hero-eyebrow">Confidential &amp; Secure</div>
+      <div class="pkg-hero-title">Your Estate Plan Starts Here</div>
+      <div class="pkg-hero-body">Select the service that fits your situation. Our attorneys will prepare your documents and review everything with you before signing.</div>
+    </div>
+
+    <div class="pkg-section-label">Select your service</div>
+    <div class="pkg-grid">
+
+      <div class="pkg-card" id="pkg-married" onclick="selectPackage('Complete Estate Plan — Married', this)">
+        <div class="pkg-radio"><div class="pkg-radio-dot"></div></div>
+        <div class="pkg-card-content">
+          <div class="pkg-card-title">Complete Estate Plan — Married</div>
+          <div class="pkg-card-desc">Comprehensive estate planning for married couples, including joint trust and all supporting documents.</div>
+          <div class="pkg-card-includes">Includes: Revocable Living Trust &middot; Pour-Over Wills &middot; Financial Powers of Attorney &middot; Healthcare Directives</div>
+        </div>
+      </div>
+
+      <div class="pkg-card" id="pkg-single" onclick="selectPackage('Complete Estate Plan — Single', this)">
+        <div class="pkg-radio"><div class="pkg-radio-dot"></div></div>
+        <div class="pkg-card-content">
+          <div class="pkg-card-title">Complete Estate Plan — Single</div>
+          <div class="pkg-card-desc">Full estate planning package for individuals, with a single-person revocable trust and all supporting documents.</div>
+          <div class="pkg-card-includes">Includes: Revocable Living Trust &middot; Pour-Over Will &middot; Financial Power of Attorney &middot; Healthcare Directive</div>
+        </div>
+      </div>
+
+      <div class="pkg-card" id="pkg-poa" onclick="selectPackage('Financial Power of Attorney', this)">
+        <div class="pkg-radio"><div class="pkg-radio-dot"></div></div>
+        <div class="pkg-card-content">
+          <div class="pkg-card-title">Financial Power of Attorney</div>
+          <div class="pkg-card-desc">Appoint a trusted person to manage your financial affairs if you become incapacitated or unavailable.</div>
+          <div class="pkg-card-includes">Includes: Durable Financial Power of Attorney &middot; Agent authorization language</div>
+        </div>
+      </div>
+
+      <div class="pkg-card" id="pkg-sns" onclick="selectPackage('Special Needs Trust', this)">
+        <div class="pkg-radio"><div class="pkg-radio-dot"></div></div>
+        <div class="pkg-card-content">
+          <div class="pkg-card-title">Special Needs Trust</div>
+          <div class="pkg-card-desc">Protect a loved one with a disability by ensuring their inheritance doesn't disqualify them from government benefits.</div>
+          <div class="pkg-card-includes">Includes: Special Needs Trust Agreement &middot; Attorney consultation on benefits preservation</div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="contact-form-card">
+      <div class="contact-form-header">Your Contact Information</div>
+      <div class="contact-form-body">
+        <div class="form-field">
+          <label class="form-label" for="clientName">Full Name</label>
+          <input type="text" class="form-input" id="clientName" placeholder="Jane Smith" autocomplete="name" />
+          <span class="form-error-msg" id="nameError">Please enter your full name</span>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="clientEmail">Email Address</label>
+          <input type="email" class="form-input" id="clientEmail" placeholder="jane@example.com" autocomplete="email" />
+          <span class="form-error-msg" id="emailError">Please enter a valid email address</span>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="clientPhone">Phone Number</label>
+          <input type="tel" class="form-input" id="clientPhone" placeholder="801-555-1234" autocomplete="tel" />
+          <span class="form-error-msg" id="phoneError">Please enter your phone number</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="pkg-continue-btn" id="pkgContinueBtn" onclick="proceedToConsent()" disabled>Continue to Review &amp; Consent</button>
+    <div class="pkg-footer-note">Flex Legal Services LLC &middot; Licensed in Utah &middot; Attorney-client privilege protected</div>
+
+  </div>
+
+  <!-- Consent screen -->
+  <div class="consent-screen hidden" id="consentScreen">
+    <div class="consent-header">
+      <button class="back-nav" onclick="goBackToPackages()" style="color:rgba(255,255,255,0.7); margin-bottom:10px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        Back to package selection
+      </button>
+      <div class="consent-header-eyebrow">Before You Begin</div>
+      <div class="consent-header-title">Estate Planning Intake — Disclosure &amp; Consent</div>
+    </div>
+    <div class="consent-body">
+
+      <div>
+        <div class="consent-section-title">Nature of This Intake</div>
+        <div class="consent-section-text">This intake is conducted under the direction and supervision of Flex Legal Services Attorneys, licensed attorneys in Utah (Flex Legal Services LLC). The information you provide is collected for the purpose of preparing your estate planning documents and establishing an attorney-client relationship with Flex Legal Services LLC.</div>
+      </div>
+
+      <div class="consent-divider"></div>
+
+      <div>
+        <div class="consent-section-title">Attorney-Client Relationship</div>
+        <div class="consent-section-text">By completing this intake, you are engaging Flex Legal Services LLC to provide estate planning legal services. This engagement is governed by the Utah Rules of Professional Conduct. All information you share during this intake is confidential and treated as attorney-client privileged communication from the moment you begin.</div>
+      </div>
+
+      <div class="consent-divider"></div>
+
+      <div>
+        <div class="consent-section-title">Use of AI Technology</div>
+        <div class="consent-section-text">This intake uses an artificial intelligence system to conduct your interview. The AI operates under attorney direction and supervision as required by Utah RPC 1.1 and 5.3. Your information is processed through Anthropic's commercial API under enterprise terms that prohibit use of your data for AI training. No information you provide is shared with third parties or used for any purpose other than preparing your estate planning documents.</div>
+      </div>
+
+      <div class="consent-divider"></div>
+
+      <div>
+        <div class="consent-section-title">No Advice During Intake</div>
+        <div class="consent-section-text">The AI intake assistant does not provide legal advice. All legal judgment, document review, and advice is provided exclusively by Flex Legal Services Attorneys. If you have legal questions, they will be addressed at your document review and signing appointment.</div>
+      </div>
+
+      <div class="consent-divider"></div>
+
+      <div>
+        <div class="consent-section-title">Scope of Representation</div>
+        <div class="consent-section-text">Flex Legal Services LLC is being retained solely for the preparation of the estate planning documents you select. This engagement does not create an ongoing general counsel relationship unless separately agreed in writing.</div>
+      </div>
+
+      <div class="consent-divider"></div>
+
+      <div>
+        <div class="consent-section-title">Conflicts</div>
+        <div class="consent-section-text">By proceeding, you confirm that you are not currently represented by another attorney in connection with the matters covered by this engagement.</div>
+      </div>
+
+      <div class="consent-divider"></div>
+
+      <div class="consent-agree-row">
+        <input type="checkbox" class="consent-checkbox" id="consentCheckbox" />
+        <label for="consentCheckbox" class="consent-agree-text">I have read and understood the above disclosure. I consent to proceed with the attorney-directed AI intake and to the establishment of an attorney-client relationship with Flex Legal Services LLC.</label>
+      </div>
+
+      <button class="consent-btn" id="consentBtn" disabled>Begin My Estate Plan</button>
+      <div class="consent-timestamp" id="consentTimestamp">Flex Legal Services LLC &mdash; Licensed in Utah &mdash; <span id="consentDateDisplay"></span></div>
+
+    </div>
+  </div>
+
+  <!-- Progress bar -->
+
+  <div class="progress-wrap hidden" id="progressWrap">
+    <div class="progress-meta">
+      <span id="progressLabel">Getting started</span>
+      <span id="progressPct">0%</span>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+  </div>
+
+  <!-- Chat card -->
+  <div class="chat-card hidden" id="chatCard">
+    <div class="chat-titlebar">
+      <div class="chat-avatar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <div class="chat-title-text">
+        <div class="chat-title-name">Flex Legal Intake</div>
+        <div class="chat-title-sub">Estate Planning — Attorney-Directed</div>
+      </div>
+      <button class="back-nav" onclick="confirmStartOver()" title="Start over" style="margin-left:auto; gap:4px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
+        Start over
+      </button>
+    </div>
+
+    <div class="chat-messages" id="chatMessages"></div>
+
+    <div class="chat-input-area">
+      <div class="input-row">
+        <input type="text" class="chat-input" id="chatInput" placeholder="Type your response here..." autocomplete="off" />
+        <button class="send-btn" id="sendBtn" title="Send">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+      <div class="chat-footer-note">This intake is attorney-directed by Flex Legal Services Attorneys &mdash; Flex Legal Services LLC. Your responses are confidential and protected under attorney-client privilege. AI technology is used under attorney supervision pursuant to Utah RPC 1.1 and 5.3. Licensed in Utah.</div>
+    </div>
+  </div>
+
+  <!-- Confirmation screen -->
+  <div class="confirm-screen" id="confirmScreen">
+    <div class="confirm-hero">
+      <div class="confirm-check">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div class="confirm-title" id="confirmTitle">Thank you — we've received your information</div>
+      <div class="confirm-body">Your intake has been submitted to Flex Legal Services. Our team will review your information and prepare your draft documents within 1–2 business days.</div>
+    </div>
+
+    <div class="summary-card">
+      <div class="summary-header">Your Submission Summary</div>
+      <div id="summaryRows"></div>
+    </div>
+
+    <div class="next-card">
+      <div class="next-header">What Happens Next</div>
+      <div class="next-row"><div class="next-num">1</div><div><div class="next-title">Our team reviews your intake</div><div class="next-desc">Typically within 1–2 business days</div></div></div>
+      <div class="next-row"><div class="next-num">2</div><div><div class="next-title">We prepare your draft documents</div><div class="next-desc">Attorney-reviewed before delivery</div></div></div>
+      <div class="next-row"><div class="next-num">3</div><div><div class="next-title">You'll receive a scheduling link</div><div class="next-desc">To book your document signing appointment</div></div></div>
+    </div>
+
+    <button class="start-over-btn" onclick="confirmStartOver()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
+      Start a new intake
+    </button>
+
+    <div class="priv-notice">Your intake was completed as part of an attorney-directed engagement with Flex Legal Services LLC and is protected under attorney-client privilege. This intake was conducted using AI technology operating under the supervision of Flex Legal Services Attorneys, pursuant to Utah Rules of Professional Conduct 1.1 and 5.3. Your information was transmitted using Anthropic's commercial API under enterprise data terms and is not used for AI training. Flex Legal Services LLC is licensed to practice law in Utah.</div>
+  </div>
+
+</main>
+
+<script>
+// ─── Back navigation ─────────────────────────────────────────────────────────
+function goBackToPackages() {
+  // Hide consent, show package selection
+  document.getElementById('consentScreen').classList.add('hidden');
+  document.getElementById('pkgScreen').classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function confirmStartOver() {
+  if (conversationHistory.length > 1) {
+    if (!confirm('Are you sure you want to start over? Your current progress will be lost.')) return;
+  }
+  // Reset everything and go back to package selection
+  conversationHistory = [];
+  collectedData = {};
+  currentStage = 0;
+  selectedPackage = null;
+  clientInfo = {};
+
+  // Reset progress bar
+  const fill = document.getElementById('progressFill');
+  const label = document.getElementById('progressLabel');
+  const pct = document.getElementById('progressPct');
+  if (fill) fill.style.width = '0%';
+  if (label) label.textContent = 'Getting started';
+  if (pct) pct.textContent = '0%';
+
+  // Clear chat messages
+  const msgs = document.getElementById('chatMessages');
+  if (msgs) msgs.innerHTML = '';
+
+  // Reset form fields
+  const nameEl = document.getElementById('clientName');
+  const emailEl = document.getElementById('clientEmail');
+  const phoneEl = document.getElementById('clientPhone');
+  if (nameEl) nameEl.value = '';
+  if (emailEl) emailEl.value = '';
+  if (phoneEl) phoneEl.value = '';
+
+  // Deselect all package cards
+  document.querySelectorAll('.pkg-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('pkgContinueBtn').disabled = true;
+
+  // Hide all screens, show package selection
+  document.getElementById('confirmScreen').classList.remove('visible');
+  document.getElementById('chatCard').classList.add('hidden');
+  document.getElementById('progressWrap').classList.add('hidden');
+  document.getElementById('consentScreen').classList.add('hidden');
+  document.getElementById('pkgScreen').classList.remove('hidden');
+
+  // Re-enable input
+  setWaiting(false);
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ─── Package selection ────────────────────────────────────────────────────────
+let selectedPackage = null;
+let clientInfo = {};
+
+function selectPackage(packageName, cardEl) {
+  // Deselect all cards
+  document.querySelectorAll('.pkg-card').forEach(c => c.classList.remove('selected'));
+  // Select clicked card
+  cardEl.classList.add('selected');
+  selectedPackage = packageName;
+  updatePkgContinueBtn();
+}
+
+function updatePkgContinueBtn() {
+  const name  = document.getElementById('clientName').value.trim();
+  const email = document.getElementById('clientEmail').value.trim();
+  const phone = document.getElementById('clientPhone').value.trim();
+  const valid = selectedPackage && name && email && phone;
+  document.getElementById('pkgContinueBtn').disabled = !valid;
+}
+
+// Live validation on contact form inputs
+['clientName','clientEmail','clientPhone'].forEach(id => {
+  document.getElementById(id).addEventListener('input', updatePkgContinueBtn);
 });
 
-// ─── Route: Continue conversation (streaming) ────────────────────────────────
-app.post('/chat', async (req, res) => {
+function proceedToConsent() {
+  const name  = document.getElementById('clientName').value.trim();
+  const email = document.getElementById('clientEmail').value.trim();
+  const phone = document.getElementById('clientPhone').value.trim();
+
+  // Validate
+  let valid = true;
+  if (!name)  { document.getElementById('nameError').classList.add('visible');  valid = false; } 
+  else          document.getElementById('nameError').classList.remove('visible');
+  if (!email || !email.includes('@')) { document.getElementById('emailError').classList.add('visible'); valid = false; }
+  else          document.getElementById('emailError').classList.remove('visible');
+  if (!phone) { document.getElementById('phoneError').classList.add('visible'); valid = false; }
+  else          document.getElementById('phoneError').classList.remove('visible');
+  if (!selectedPackage || !valid) return;
+
+  // Store client info
+  clientInfo = { name, email, phone, package: selectedPackage };
+
+  // Hide package screen, show consent screen
+  document.getElementById('pkgScreen').classList.add('hidden');
+  document.getElementById('consentScreen').classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ─── Configuration ───────────────────────────────────────────────────────────
+const BACKEND_URL = 'https://flex-legal-intake.onrender.com';
+
+// ─── State ───────────────────────────────────────────────────────────────────
+let conversationHistory = [];
+let collectedData = {};
+let isWaiting = false;
+
+// Progress stages
+const STAGES = [
+  { label: 'Getting started', pct: 5 },
+  { label: 'Basic information', pct: 20 },
+  { label: 'Family details', pct: 40 },
+  { label: 'Trust & trustees', pct: 60 },
+  { label: 'Contact details', pct: 80 },
+  { label: 'Almost done', pct: 92 },
+  { label: 'Complete', pct: 100 },
+];
+let currentStage = 0;
+
+// ─── DOM refs ────────────────────────────────────────────────────────────────
+const chatMessages = document.getElementById('chatMessages');
+const chatInput    = document.getElementById('chatInput');
+const sendBtn      = document.getElementById('sendBtn');
+const progressFill = document.getElementById('progressFill');
+const progressLabel= document.getElementById('progressLabel');
+const progressPct  = document.getElementById('progressPct');
+
+// ─── Progress ────────────────────────────────────────────────────────────────
+function advanceStage() {
+  if (currentStage < STAGES.length - 1) currentStage++;
+  const s = STAGES[currentStage];
+  progressFill.style.width = s.pct + '%';
+  progressLabel.textContent = s.label;
+  progressPct.textContent = s.pct + '%';
+}
+
+// ─── Message rendering ───────────────────────────────────────────────────────
+function appendBotMessageStreaming(text) {
+  const msgs = document.getElementById('chatMessages');
+  const wrapper = document.createElement('div');
+  wrapper.className = 'message-row bot-row';
+  wrapper.innerHTML = `
+    <div class="bot-avatar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+    <div class="bot-bubble streaming-bubble"></div>`;
+  msgs.appendChild(wrapper);
+  msgs.scrollTop = msgs.scrollHeight;
+  return wrapper.querySelector('.bot-bubble');
+}
+
+function updateStreamingBubble(bubble, text) {
+  // Hide [INTAKE_COMPLETE] and everything after from display
+  const displayText = text.split('[INTAKE_COMPLETE]')[0].trim();
+  bubble.innerHTML = displayText.replace(/
+/g, '<br>');
+  const msgs = document.getElementById('chatMessages');
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function appendBotMessage(text) {
+  const wrap = document.createElement('div');
+  wrap.className = 'msg msg-bot';
+  wrap.innerHTML = `
+    <div class="msg-av-bot">FL</div>
+    <div class="bubble-bot">${text.replace(/\n/g, '<br>')}</div>
+  `;
+  chatMessages.appendChild(wrap);
+  scrollToBottom();
+}
+
+function appendUserMessage(text) {
+  const wrap = document.createElement('div');
+  wrap.className = 'msg msg-user';
+  wrap.innerHTML = `
+    <div class="msg-av-usr">You</div>
+    <div class="bubble-usr">${escapeHtml(text)}</div>
+  `;
+  chatMessages.appendChild(wrap);
+  scrollToBottom();
+}
+
+function appendErrorMessage(text) {
+  const wrap = document.createElement('div');
+  wrap.className = 'msg msg-bot';
+  wrap.innerHTML = `
+    <div class="msg-av-bot">FL</div>
+    <div class="error-bubble">${escapeHtml(text)}</div>
+  `;
+  chatMessages.appendChild(wrap);
+  scrollToBottom();
+}
+
+function showTyping() {
+  const wrap = document.createElement('div');
+  wrap.className = 'typing-wrap';
+  wrap.id = 'typingIndicator';
+  wrap.innerHTML = `
+    <div class="msg-av-bot">FL</div>
+    <div class="typing-bubble">
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+    </div>
+  `;
+  chatMessages.appendChild(wrap);
+  scrollToBottom();
+}
+
+function hideTyping() {
+  const t = document.getElementById('typingIndicator');
+  if (t) t.remove();
+}
+
+function scrollToBottom() {
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ─── Send message ─────────────────────────────────────────────────────────────
+async function sendMessage() {
+  const text = chatInput.value.trim();
+  if (!text || isWaiting) return;
+
+  appendUserMessage(text);
+  conversationHistory.push({ role: 'user', content: text });
+  chatInput.value = '';
+  setWaiting(true);
+  showTyping();
+
   try {
-    const { messages } = req.body;
-
-    // Set headers for Server-Sent Events streaming
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.flushHeaders();
-
-    let fullText = '';
-
-    const stream = anthropic.messages.stream({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 2048,
-      system: SYSTEM_PROMPT,
-      messages: messages
+    const res = await fetch(`${BACKEND_URL}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: conversationHistory })
     });
 
-    stream.on('text', (text) => {
-      fullText += text;
-      // Send each token chunk to client
-      res.write(`data: ${JSON.stringify({ token: text })}
+    if (!res.ok) throw new Error('Server error');
 
-`);
-    });
+    // Streaming response
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let streamedText = '';
+    let botBubble = null;
+    let finalData = null;
+    hideTyping();
 
-    stream.on('finalMessage', async () => {
-      // Check if intake is complete
-      if (fullText.includes('[INTAKE_COMPLETE]')) {
-        const parts = fullText.split('[INTAKE_COMPLETE]');
-        const closingMessage = parts[0].trim();
-        const jsonStr = parts[1].trim();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-        let intakeData;
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('
+');
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
         try {
-          intakeData = JSON.parse(jsonStr);
-        } catch (e) {
-          console.error('Failed to parse intake JSON:', jsonStr);
-          res.write(`data: ${JSON.stringify({ done: true, complete: false, reply: closingMessage })}
+          const parsed = JSON.parse(line.slice(6));
 
-`);
-          res.end();
-          return;
-        }
+          if (parsed.token !== undefined) {
+            // Streaming token — build bubble incrementally
+            streamedText += parsed.token;
+            if (!botBubble) {
+              botBubble = appendBotMessageStreaming('');
+            }
+            updateStreamingBubble(botBubble, streamedText);
+          }
 
-        // Fire off document generation and email
-        generateAndEmail(intakeData).catch(err => console.error('Doc gen error:', err));
-
-        res.write(`data: ${JSON.stringify({ done: true, complete: true, reply: closingMessage, intakeData })}
-
-`);
-      } else {
-        res.write(`data: ${JSON.stringify({ done: true, complete: false, reply: fullText })}
-
-`);
+          if (parsed.done) {
+            finalData = parsed;
+          }
+        } catch(e) { /* skip malformed lines */ }
       }
-      res.end();
-    });
+    }
 
-    stream.on('error', (err) => {
-      console.error('Stream error:', err.message);
-      res.write(`data: ${JSON.stringify({ error: 'Stream failed' })}
-
-`);
-      res.end();
-    });
+    if (finalData && finalData.complete && finalData.intakeData) {
+      collectedData = finalData.intakeData;
+      conversationHistory.push({ role: 'assistant', content: finalData.reply });
+      advanceStage();
+      setTimeout(() => showConfirmation(finalData.intakeData), 1800);
+    } else {
+      const replyText = finalData ? finalData.reply : streamedText;
+      conversationHistory.push({ role: 'assistant', content: replyText });
+      advanceStage();
+      setWaiting(false);
+    }
 
   } catch (err) {
-    console.error('Chat error:', err.message);
-    res.write(`data: ${JSON.stringify({ error: 'Chat failed' })}
-
-`);
-    res.end();
+    hideTyping();
+    appendErrorMessage('Something went wrong. Please refresh the page and try again, or call us at 801-899-3704.');
+    setWaiting(false);
   }
+}
+
+function setWaiting(val) {
+  isWaiting = val;
+  chatInput.disabled = val;
+  sendBtn.disabled = val;
+}
+
+// ─── Confirmation ─────────────────────────────────────────────────────────────
+function showConfirmation(data) {
+  document.getElementById('chatCard').classList.add('hidden');
+  document.getElementById('progressWrap').classList.add('hidden');
+  document.getElementById('introCard').classList.add('hidden');
+
+  const screen = document.getElementById('confirmScreen');
+  screen.classList.add('visible');
+
+  // Set title
+  const firstName = data['Your_First_Name'] || 'there';
+  document.getElementById('confirmTitle').textContent = `Thank you, ${firstName} — we've received your information`;
+
+  // Build summary rows
+  const rows = document.getElementById('summaryRows');
+  const fields = [
+    ['Trust Type', data['Trust_Type']],
+    ['Trust Name', data['Name_of_Trust']],
+    ['Your Name', `${data['Your_First_Name'] || ''} ${data['Your_Last_Name'] || ''}`.trim()],
+    ['Spouse Name', data['Spouse_First_Name'] ? `${data['Spouse_First_Name']} ${data['Your_Last_Name'] || ''}` : null],
+    ['Children', data['Full_Legal_Names_of_Children']],
+    ['Successor Trustee', data['First_Choice_Successor_Trustee']],
+    ['Alternate Trustee', data['Second_Choice_Successor_Trustee']],
+    ['Healthcare Agent', data['Alternate_Agent_Name']],
+    ['Submitted', new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })],
+  ];
+
+  fields.forEach(([label, val]) => {
+    if (!val) return;
+    const row = document.createElement('div');
+    row.className = 'summary-row';
+    row.innerHTML = `<span class="sum-label">${label}</span><span class="sum-val">${escapeHtml(String(val))}</span>`;
+    rows.appendChild(row);
+  });
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ─── Consent screen ───────────────────────────────────────────────────────────
+const consentCheckbox  = document.getElementById('consentCheckbox');
+const consentBtn       = document.getElementById('consentBtn');
+const consentScreen    = document.getElementById('consentScreen');
+const consentDateDisplay = document.getElementById('consentDateDisplay');
+
+// Show today's date on consent screen
+consentDateDisplay.textContent = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+// Enable button only when checkbox checked
+consentCheckbox.addEventListener('change', () => {
+  consentBtn.disabled = !consentCheckbox.checked;
 });
 
-// ─── Document generation ──────────────────────────────────────────────────────
-async function generateAndEmail(data) {
-  const isJoint = data.Trust_Type === 'Joint Marital Trust';
-  const templateFile = isJoint ? 'joint_trust.docx' : 'single_trust.docx';
-  const templatePath = path.join(__dirname, 'templates', templateFile);
+// On agree — record timestamp, hide consent, show chat
+consentBtn.addEventListener('click', () => {
+  if (!consentCheckbox.checked) return;
 
-  if (!fs.existsSync(templatePath)) {
-    console.error(`Template not found: ${templatePath}`);
-    return;
+  // Record consent timestamp (could be sent to server for logging)
+  const consentTime = new Date().toISOString();
+  console.log('Consent given at:', consentTime);
+
+  // Hide consent screen, show chat
+  consentScreen.classList.add('hidden');
+  document.getElementById('progressWrap').classList.remove('hidden');
+  document.getElementById('chatCard').classList.remove('hidden');
+
+  // Start the chatbot with client info and selected package
+  init(clientInfo, selectedPackage);
+});
+
+// ─── Init: load first message from backend ────────────────────────────────────
+async function init(clientInfo, selectedPackage) {
+  setWaiting(true);
+  showTyping();
+  try {
+    const res = await fetch(`${BACKEND_URL}/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientInfo, selectedPackage })
+    });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    hideTyping();
+    appendBotMessage(data.reply);
+    conversationHistory.push({ role: 'assistant', content: data.reply });
+    setWaiting(false);
+  } catch {
+    hideTyping();
+    const firstName = clientInfo && clientInfo.name ? clientInfo.name.split(' ')[0] : '';
+    const greeting = firstName ? `Hi ${firstName}!` : 'Welcome to Flex Legal Services.';
+    const fallback = `${greeting} I'm here to help prepare your ${selectedPackage || 'estate planning documents'}. Everything you share is confidential and protected under attorney-client privilege.\n\nLet's get started — what is your full legal name as it should appear on your documents?`;
+    appendBotMessage(fallback);
+    conversationHistory.push({ role: 'assistant', content: fallback });
+    setWaiting(false);
   }
-
-  // Build merge data first so it's available for footer processing
-  const mergeData = {
-    Your_First_Name:                  data.Your_First_Name || '',
-    Your_Last_Name:                   data.Your_Last_Name || '',
-    Your_Birth_Date:                  data.Your_Birth_Date || '',
-    Your_Preferred_Signature_Name:    data.Your_Preferred_Signature_Name || '',
-    Your_Cell_Phone:                  data.Your_Cell_Phone || '',
-    Your_Work_Phone_Number:           data.Your_Work_Phone_Number || 'N/A',
-    Address:                          data.Address || '',
-    City:                             data.City || '',
-    State:                            data.State || 'Utah',
-    Zip_Code:                         data.Zip_Code || '',
-    County:                           data.County || '',
-    Spouse_First_Name:                data.Spouse_First_Name || '',
-    Spouse_Birth_Date:                data.Spouse_Birth_Date || '',
-    Spouses_Preferred_Signature_Name: data.Spouses_Preferred_Signature_Name || '',
-    Spouse_Cell_Phone:                data.Spouse_Cell_Phone || '',
-    Spouse_Work_Phone_Number:         data.Spouse_Work_Phone_Number || 'N/A',
-    Full_Legal_Names_of_Children:     data.Full_Legal_Names_of_Children || 'None',
-    Name_of_Trust:                    data.Name_of_Trust || `${data.Your_Last_Name} Family Trust`,
-    NAME_OF_TRUST:                    data.Name_of_Trust || `${data.Your_Last_Name} Family Trust`,
-    First_Choice_Successor_Trustee:   data.First_Choice_Successor_Trustee || '',
-    Second_Choice_Successor_Trustee:  data.Second_Choice_Successor_Trustee || '',
-    'Second_Choice_Successor_Trustee_': data.Second_Choice_Successor_Trustee || '',
-    HC_Primary_Agent_Name:            data.HC_Primary_Agent_Name || '',
-    HC_Primary_Agent_Address:         data.HC_Primary_Agent_Address || '',
-    HC_Primary_Agent_City:            data.HC_Primary_Agent_City || '',
-    HC_Primary_Agent_State:           data.HC_Primary_Agent_State || '',
-    HC_Primary_Agent_Zip:             data.HC_Primary_Agent_Zip || '',
-    HC_Primary_Agent_Cell_Phone:      data.HC_Primary_Agent_Cell_Phone || '',
-    HC_Primary_Agent_Work_Phone:      data.HC_Primary_Agent_Work_Phone || 'N/A',
-    POA_Backup_Agent_Name:            data.POA_Backup_Agent_Name || '',
-    POA_Backup_Agent_Address:         data.POA_Backup_Agent_Address || '',
-    POA_Backup_Agent_City:            data.POA_Backup_Agent_City || '',
-    POA_Backup_Agent_State:           data.POA_Backup_Agent_State || '',
-    POA_Backup_Agent_Zip:             data.POA_Backup_Agent_Zip || '',
-    POA_Backup_Agent_Cell_Phone:      data.POA_Backup_Agent_Cell_Phone || '',
-    POA_Backup_Agent_Work_Phone:      data.POA_Backup_Agent_Work_Phone || 'N/A',
-    // Backup HCD agent maps to Alternate_Agent fields in template
-    Alternate_Agent_Name:             data.HC_Backup_Agent_Name || data.Alternate_Agent_Name || '',
-    Alternate_Agent_Address:          data.HC_Backup_Agent_Address || data.Alternate_Agent_Address || '',
-    Alternate_Agent_City:             data.HC_Backup_Agent_City || data.Alternate_Agent_City || '',
-    Alternate_Agent_State:            data.HC_Backup_Agent_State || data.Alternate_Agent_State || '',
-    Alternate_Agent_Zip:              data.HC_Backup_Agent_Zip || data.Alternate_Agent_Zip || '',
-    Alternate_Agent_Cell_Phone:       data.HC_Backup_Agent_Cell_Phone || data.Alternate_Agent_Cell_Phone || '',
-    Alternate_Agent_Work_Phone:       data.HC_Backup_Agent_Work_Phone || data.Alternate_Agent_Work_Phone || 'N/A',
-    HC_Backup_Agent_Name:             data.HC_Backup_Agent_Name || '',
-    HC_Backup_Agent_Address:          data.HC_Backup_Agent_Address || '',
-    HC_Backup_Agent_City:             data.HC_Backup_Agent_City || '',
-    HC_Backup_Agent_State:            data.HC_Backup_Agent_State || '',
-    HC_Backup_Agent_Zip:              data.HC_Backup_Agent_Zip || '',
-    HC_Backup_Agent_Cell_Phone:       data.HC_Backup_Agent_Cell_Phone || '',
-    HC_Backup_Agent_Work_Phone:       data.HC_Backup_Agent_Work_Phone || 'N/A',
-  };
-
-  // Load template
-  const fileContent = fs.readFileSync(templatePath, 'binary');
-  const zip = new PizZip(fileContent);
-
-  // Manually replace merge fields in all header/footer XML files
-  // (docxtemplater only processes document.xml by default)
-  Object.keys(zip.files).forEach(filePath => {
-    if (filePath.match(/^word\/(header|footer)\d*\.xml$/)) {
-      let xmlContent = zip.files[filePath].asText();
-      let changed = false;
-      Object.keys(mergeData).forEach(key => {
-        const marker = '«' + key + '»';
-        if (xmlContent.includes(marker)) {
-          xmlContent = xmlContent.split(marker).join(mergeData[key] || '');
-          changed = true;
-        }
-      });
-      if (changed) zip.file(filePath, xmlContent);
-    }
-  });
-
-  // Process main document body with docxtemplater
-  const doc = new Docxtemplater(zip, {
-    paragraphLoop: true,
-    linebreaks: true,
-    delimiters: { start: '«', end: '»' },
-    nullGetter: () => '___________',
-  });
-
-  doc.render(mergeData);
-
-  const buf = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
-
-  // Build filename
-  const lastName = (data.Your_Last_Name || 'Client').replace(/\s+/g, '_');
-  const dateStr  = new Date().toISOString().slice(0,10);
-  const filename = `${lastName}_${isJoint ? 'Joint' : 'Single'}_Trust_Draft_${dateStr}.docx`;
-
-  // Send email
-  await sendEmail(data, buf, filename);
 }
 
-// ─── Email ────────────────────────────────────────────────────────────────────
-async function sendEmail(data, docBuffer, filename) {
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD }
-  });
+// ─── Event listeners ──────────────────────────────────────────────────────────
+sendBtn.addEventListener('click', sendMessage);
+chatInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
 
-  const clientName = `${data.Your_First_Name || ''} ${data.Your_Last_Name || ''}`.trim();
-  const trustType  = data.Trust_Type || 'Estate Plan';
-  const submitted  = new Date().toLocaleString('en-US', { timeZone: 'America/Denver' });
-
-  const emailBody = `
-New estate planning intake completed — ready for paralegal review.
-
-PACKAGE: ${data.Package || data.Trust_Type || 'Estate Plan'}
-CLIENT: ${clientName}
-TRUST TYPE: ${trustType}
-TRUST NAME: ${data.Name_of_Trust || ''}
-EMAIL: ${data.Client_Email || 'Not provided'}
-PHONE: ${data.Client_Phone || data.Your_Cell_Phone || 'Not provided'}
-SUBMITTED: ${submitted} (Mountain Time)
-
-SPOUSE: ${data.Spouse_First_Name ? `${data.Spouse_First_Name} ${data.Your_Last_Name}` : 'N/A'}
-CHILDREN: ${data.Full_Legal_Names_of_Children || 'None listed'}
-SUCCESSOR TRUSTEE 1: ${data.First_Choice_Successor_Trustee || ''}
-SUCCESSOR TRUSTEE 2: ${data.Second_Choice_Successor_Trustee || ''}
-POA AGENT: ${data.HC_Primary_Agent_Name || data.Spouses_Preferred_Signature_Name || 'Spouse'}
-POA BACKUP AGENT: ${data.POA_Backup_Agent_Name || ''}
-HEALTHCARE AGENT (Primary): ${data.Alternate_Agent_Name || ''}
-HEALTHCARE AGENT (Backup): ${data.HC_Backup_Agent_Name || ''}
-
-ADDRESS: ${data.Address || ''}, ${data.City || ''}, ${data.State || ''} ${data.Zip_Code || ''}
-CLIENT PHONE: ${data.Your_Cell_Phone || ''}
-
-The draft ${filename} is attached. Please review and forward to the supervising attorney.
-
-— Flex Legal Services Attorneys
-  `.trim();
-
-  await transporter.sendMail({
-    from: `"Flex Legal Intake" <${GMAIL_USER}>`,
-    to: NOTIFY_EMAIL,
-    subject: `[INTAKE] ${clientName} — ${trustType} — Review Required`,
-    text: emailBody,
-    attachments: [{
-      filename,
-      content: docBuffer,
-      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    }]
-  });
-
-  console.log(`Email sent for ${clientName} — ${filename}`);
-}
-
-// ─── Health check ─────────────────────────────────────────────────────────────
-app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
-
-// ─── Start server ─────────────────────────────────────────────────────────────
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Flex Legal intake server running on port ${PORT}`));
+// Consent screen handles init trigger — do not auto-start
+</script>
+</body>
+</html>
