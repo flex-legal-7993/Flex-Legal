@@ -990,7 +990,7 @@ function proceedToConsent() {
 }
 
 // ─── Configuration ───────────────────────────────────────────────────────────
-const BACKEND_URL = 'https://flex-legal-intake.onrender.com'; // Updated during deployment
+const BACKEND_URL = 'https://flex-legal-intake.onrender.com';
 
 // ─── State ───────────────────────────────────────────────────────────────────
 let conversationHistory = [];
@@ -1027,6 +1027,27 @@ function advanceStage() {
 }
 
 // ─── Message rendering ───────────────────────────────────────────────────────
+function appendBotMessageStreaming(text) {
+  const msgs = document.getElementById('chatMessages');
+  const wrapper = document.createElement('div');
+  wrapper.className = 'message-row bot-row';
+  wrapper.innerHTML = `
+    <div class="bot-avatar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+    <div class="bot-bubble streaming-bubble"></div>`;
+  msgs.appendChild(wrapper);
+  msgs.scrollTop = msgs.scrollHeight;
+  return wrapper.querySelector('.bot-bubble');
+}
+
+function updateStreamingBubble(bubble, text) {
+  // Hide [INTAKE_COMPLETE] and everything after from display
+  const displayText = text.split('[INTAKE_COMPLETE]')[0].trim();
+  bubble.innerHTML = displayText.replace(/
+/g, '<br>');
+  const msgs = document.getElementById('chatMessages');
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
 function appendBotMessage(text) {
   const wrap = document.createElement('div');
   wrap.className = 'msg msg-bot';
@@ -1108,20 +1129,52 @@ async function sendMessage() {
     });
 
     if (!res.ok) throw new Error('Server error');
-    const data = await res.json();
 
+    // Streaming response
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let streamedText = '';
+    let botBubble = null;
+    let finalData = null;
     hideTyping();
 
-    if (data.complete && data.intakeData) {
-      // Intake complete — show confirmation
-      collectedData = data.intakeData;
-      conversationHistory.push({ role: 'assistant', content: data.reply });
-      appendBotMessage(data.reply);
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('
+');
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const parsed = JSON.parse(line.slice(6));
+
+          if (parsed.token !== undefined) {
+            // Streaming token — build bubble incrementally
+            streamedText += parsed.token;
+            if (!botBubble) {
+              botBubble = appendBotMessageStreaming('');
+            }
+            updateStreamingBubble(botBubble, streamedText);
+          }
+
+          if (parsed.done) {
+            finalData = parsed;
+          }
+        } catch(e) { /* skip malformed lines */ }
+      }
+    }
+
+    if (finalData && finalData.complete && finalData.intakeData) {
+      collectedData = finalData.intakeData;
+      conversationHistory.push({ role: 'assistant', content: finalData.reply });
       advanceStage();
-      setTimeout(() => showConfirmation(data.intakeData), 1800);
+      setTimeout(() => showConfirmation(finalData.intakeData), 1800);
     } else {
-      conversationHistory.push({ role: 'assistant', content: data.reply });
-      appendBotMessage(data.reply);
+      const replyText = finalData ? finalData.reply : streamedText;
+      conversationHistory.push({ role: 'assistant', content: replyText });
       advanceStage();
       setWaiting(false);
     }
