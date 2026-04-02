@@ -180,14 +180,17 @@ Attorney_Flags: all flags as a single string separated by " | "`;
 app.post('/start', async (req, res) => {
   try {
     const { clientInfo, selectedPackage } = req.body;
-    const userMsg = `Hello, I am ${clientInfo ? clientInfo.name : 'a new client'} and I have selected the ${selectedPackage || 'Complete Estate Plan'} package. I am ready to begin my estate planning intake.`;
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 300,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userMsg }]
-    });
-    res.json({ reply: response.content[0].text });
+    const firstName = clientInfo && clientInfo.name ? clientInfo.name.split(' ')[0] : 'there';
+
+    // Two hardcoded opening bubbles — consistent, fast, no AI needed
+    const bubble1 = `Welcome to Flex Legal Services, ${firstName}! I'm here to help gather the information your attorney needs to prepare your estate plan for your ${selectedPackage || 'Complete Estate Plan'} package. I'll guide you through everything step by step.\n\nWe'll cover your trust, powers of attorney, and healthcare directive. As we go, I'll explain what each document does and why it matters.`;
+
+    const bubble2 = `A few things to keep in mind before we begin:\n\n— Your answers will be reviewed by your attorney before any documents are finalized\n— This is not legal advice — it's an intake process to gather your information\n— If you're unsure about anything, just say so and we'll make a note for your attorney\n\nAre you ready to get started?`;
+
+    // The combined text is stored in conversation history so the AI has full context
+    const combinedForHistory = `${bubble1}\n\n${bubble2}`;
+
+    res.json({ bubble1, bubble2, combinedForHistory });
   } catch (err) {
     console.error('Start error:', err);
     res.status(500).json({ error: 'Failed to start conversation' });

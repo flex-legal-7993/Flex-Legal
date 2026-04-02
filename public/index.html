@@ -1511,9 +1511,27 @@ async function init(clientInfo, selectedPackage) {
     if (!res.ok) throw new Error();
     const data = await res.json();
     hideTyping();
-    appendBotMessage(data.reply);
-    conversationHistory.push({ role: 'assistant', content: data.reply });
-    setWaiting(false);
+
+    // Show first bubble
+    appendBotMessage(data.bubble1 || data.reply);
+
+    // Show typing indicator, then second bubble after a short delay
+    if (data.bubble2) {
+      setTimeout(() => {
+        showTyping();
+        setTimeout(() => {
+          hideTyping();
+          appendBotMessage(data.bubble2);
+          // Store combined text in conversation history for AI context
+          conversationHistory.push({ role: 'assistant', content: data.combinedForHistory || data.bubble1 + '\n\n' + data.bubble2 });
+          setWaiting(false);
+        }, 1200);
+      }, 600);
+    } else {
+      conversationHistory.push({ role: 'assistant', content: data.reply });
+      setWaiting(false);
+    }
+
   } catch {
     hideTyping();
     const firstName = clientInfo && clientInfo.name ? clientInfo.name.split(' ')[0] : '';
