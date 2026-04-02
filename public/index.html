@@ -326,6 +326,143 @@
     gap: 16px;
   }
   .confirm-screen.visible { display: flex; }
+  .confirm-screen.hidden { display: none !important; }
+
+  /* Important warning card */
+  .important-card {
+    background: #fff8e8;
+    border: 1.5px solid var(--gold);
+    border-radius: 12px;
+    padding: 16px 18px;
+  }
+  .important-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--navy);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .important-body {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  /* Document checklist card */
+  .docs-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+  }
+  .docs-header {
+    font-family: 'Playfair Display', serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--navy);
+    margin-bottom: 6px;
+  }
+  .docs-body {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+  }
+  .docs-list { display: flex; flex-direction: column; gap: 8px; }
+  .doc-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--cream);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text);
+    font-weight: 500;
+  }
+  .doc-icon {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    background: var(--navy);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  /* Trust funding card */
+  .funding-card {
+    background: #f0f5ff;
+    border: 1px solid #c5d8f5;
+    border-radius: 12px;
+    padding: 18px;
+  }
+  .funding-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--navy);
+    margin-bottom: 10px;
+  }
+  .funding-body { font-size: 13px; color: var(--text); line-height: 1.6; }
+  .funding-list {
+    margin-left: 18px;
+    margin-top: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+
+  /* Certificate of Trust card */
+  .cert-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+  }
+  .cert-header {
+    font-family: 'Playfair Display', serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--navy);
+    margin-bottom: 8px;
+  }
+  .cert-body { font-size: 13px; color: var(--text); line-height: 1.6; }
+
+  /* Contact confirm card */
+  .contact-confirm-card {
+    background: var(--navy);
+    border-radius: 12px;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .contact-confirm-header {
+    font-family: 'Playfair Display', serif;
+    font-size: 14px;
+    color: var(--white);
+    margin-bottom: 4px;
+  }
+  .contact-confirm-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--gold-light);
+  }
+  .contact-confirm-row a {
+    color: var(--gold-light);
+    text-decoration: none;
+  }
 
   .confirm-hero {
     background: var(--navy);
@@ -851,25 +988,85 @@
   </div>
 
   <!-- Confirmation screen -->
-  <div class="confirm-screen" id="confirmScreen">
+  <div class="confirm-screen hidden" id="confirmScreen">
     <div class="confirm-hero">
       <div class="confirm-check">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
       </div>
       <div class="confirm-title" id="confirmTitle">Thank you — we've received your information</div>
-      <div class="confirm-body">Your intake has been submitted to Flex Legal Services. Our team will review your information and prepare your draft documents within 1–2 business days.</div>
+      <div class="confirm-body">Your intake has been submitted to Flex Legal Services. Our team will review your information and prepare your draft documents.</div>
     </div>
 
+    <!-- IMPORTANT warning -->
+    <div class="important-card">
+      <div class="important-header">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        IMPORTANT — Please Read
+      </div>
+      <div class="important-body">Your draft documents will contain sections that need to be completed at your signing appointment. <strong>Please do not sign any documents until you have reviewed them with your attorney.</strong> Your attorney will walk you through every open section and make sure everything is completed correctly before you sign.</div>
+    </div>
+
+    <!-- Summary -->
     <div class="summary-card">
       <div class="summary-header">Your Submission Summary</div>
       <div id="summaryRows"></div>
     </div>
 
+    <!-- Document checklist -->
+    <div class="docs-card">
+      <div class="docs-header">Your Estate Planning Documents</div>
+      <div class="docs-body">Your Complete Estate Plan includes the following documents:</div>
+      <div class="docs-list" id="docsList"></div>
+    </div>
+
+    <!-- Trust funding -->
+    <div class="funding-card">
+      <div class="funding-header">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1a5490" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        Critical Next Step: Fund Your Trust
+      </div>
+      <div class="funding-body">
+        <p>Your trust works properly only if your assets are transferred into it — this is called <strong>funding your trust</strong>. A trust that is never funded does not avoid probate.</p>
+        <p style="margin-top:10px;">Common assets to transfer include:</p>
+        <ul class="funding-list">
+          <li>Real estate (your attorney will prepare a deed for your primary residence)</li>
+          <li>Bank and savings accounts — contact your institution to retitle in the trust's name</li>
+          <li>Investment and brokerage accounts</li>
+          <li>Life insurance — update beneficiary designations to name the trust</li>
+          <li>Business interests and partnership interests</li>
+        </ul>
+        <p style="margin-top:10px;">Your attorney will discuss trust funding in detail at your signing appointment. Do not transfer assets until you have spoken with your attorney.</p>
+      </div>
+    </div>
+
+    <!-- Certificate of Trust -->
+    <div class="cert-card">
+      <div class="cert-header">About Your Certificate of Trust</div>
+      <div class="cert-body">
+        <p>Your estate plan includes a <strong>Certificate of Trust</strong> — a short summary document that proves your trust exists and identifies the trustees, without disclosing the full details of your trust.</p>
+        <p style="margin-top:10px;">You will use the Certificate of Trust when you open trust bank accounts, transfer real estate, work with brokerages, and deal with any institution that needs to verify the trust. Keep several signed copies available.</p>
+      </div>
+    </div>
+
+    <!-- What happens next -->
     <div class="next-card">
       <div class="next-header">What Happens Next</div>
-      <div class="next-row"><div class="next-num">1</div><div><div class="next-title">Our team reviews your intake</div><div class="next-desc">Typically within 1–2 business days</div></div></div>
-      <div class="next-row"><div class="next-num">2</div><div><div class="next-title">We prepare your draft documents</div><div class="next-desc">Attorney-reviewed before delivery</div></div></div>
-      <div class="next-row"><div class="next-num">3</div><div><div class="next-title">You'll receive a scheduling link</div><div class="next-desc">To book your document signing appointment</div></div></div>
+      <div class="next-row"><div class="next-num">1</div><div><div class="next-title">Our team reviews your intake</div><div class="next-desc">Your attorney will review all information and attorney flags</div></div></div>
+      <div class="next-row"><div class="next-num">2</div><div><div class="next-title">Draft documents are prepared</div><div class="next-desc">Attorney-reviewed before delivery to you</div></div></div>
+      <div class="next-row"><div class="next-num">3</div><div><div class="next-title">You'll be contacted to schedule signing</div><div class="next-desc">Your attorney will walk through all open sections with you</div></div></div>
+    </div>
+
+    <!-- Contact -->
+    <div class="contact-confirm-card">
+      <div class="contact-confirm-header">Questions? We're here to help.</div>
+      <div class="contact-confirm-row">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 2.18h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        <span>801-899-3704</span>
+      </div>
+      <div class="contact-confirm-row">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        <a href="https://flexlegalteam.com" target="_blank">flexlegalteam.com</a>
+      </div>
     </div>
 
     <button class="start-over-btn" onclick="confirmStartOver()">
@@ -877,7 +1074,7 @@
       Start a new intake
     </button>
 
-    <div class="priv-notice">Your intake was completed as part of an attorney-directed engagement with Flex Legal Services LLC and is protected under attorney-client privilege. This intake was conducted using AI technology operating under the supervision of Flex Legal Services Attorneys, pursuant to Utah Rules of Professional Conduct 1.1 and 5.3. Your information was transmitted using Anthropic's commercial API under enterprise data terms and is not used for AI training. Flex Legal Services LLC is licensed to practice law in Utah.</div>
+    <div class="priv-notice">Your intake was completed as part of an attorney-directed engagement with Flex Legal Services LLC and is protected under attorney-client privilege. This intake was conducted using AI technology operating under the supervision of Flex Legal Services Attorneys, pursuant to Utah Rules of Professional Conduct 1.1 and 5.3. Your information was transmitted using Anthropic's commercial API under enterprise data terms and is not used for AI training. Flex Legal Services LLC is licensed to practice law in Utah and Idaho.</div>
   </div>
 
 </main>
@@ -928,6 +1125,7 @@ function confirmStartOver() {
 
   // Hide all screens, show package selection
   document.getElementById('confirmScreen').classList.remove('visible');
+  document.getElementById('confirmScreen').classList.add('hidden');
   document.getElementById('chatCard').classList.add('hidden');
   document.getElementById('progressWrap').classList.add('hidden');
   document.getElementById('consentScreen').classList.add('hidden');
@@ -1145,7 +1343,9 @@ function showConfirmation(data) {
   document.getElementById('progressWrap').classList.add('hidden');
   document.getElementById('introCard').classList.add('hidden');
 
+  // Fix flash: remove hidden first, then add visible
   const screen = document.getElementById('confirmScreen');
+  screen.classList.remove('hidden');
   screen.classList.add('visible');
 
   // Set title
@@ -1154,15 +1354,24 @@ function showConfirmation(data) {
 
   // Build summary rows
   const rows = document.getElementById('summaryRows');
+  rows.innerHTML = '';
+  const spouseName = data['Spouse_First_Name'] ? `${data['Spouse_First_Name']} ${data['Your_Last_Name'] || ''}`.trim() : null;
   const fields = [
-    ['Trust Type', data['Trust_Type']],
     ['Trust Name', data['Name_of_Trust']],
-    ['Your Name', `${data['Your_First_Name'] || ''} ${data['Your_Last_Name'] || ''}`.trim()],
-    ['Spouse Name', data['Spouse_First_Name'] ? `${data['Spouse_First_Name']} ${data['Your_Last_Name'] || ''}` : null],
+    ['Trustor 1', `${data['Your_First_Name'] || ''} ${data['Your_Last_Name'] || ''}`.trim()],
+    ['Trustor 2', spouseName],
     ['Children', data['Full_Legal_Names_of_Children']],
-    ['Successor Trustee', data['First_Choice_Successor_Trustee']],
-    ['Alternate Trustee', data['Second_Choice_Successor_Trustee']],
-    ['Healthcare Agent', data['Alternate_Agent_Name']],
+    ['First Choice Successor Trustee', data['First_Choice_Successor_Trustee']],
+    ['Second Choice Successor Trustee', data['Second_Choice_Successor_Trustee']],
+    ['Guardian Arrangement', data['Guardian_Option'] === 'B' ? `Option B — ${data['First_Choice_Guardian'] || ''}` : 'Option A — same as successor trustees'],
+    ['Financial Agent', data['Financial_Agent_Primary']],
+    ['Backup Financial Agent', data['Financial_Agent_Backup']],
+    [`${data['Your_First_Name'] || 'Spouse 1'} Healthcare Agent`, spouseName ? `${spouseName} (spouse)` : null],
+    [`${data['Your_First_Name'] || 'Spouse 1'} Backup Healthcare Agent`, data['Alternate_Agent_Name']],
+    [`${data['Spouse_First_Name'] || 'Spouse 2'} Healthcare Agent`, `${data['Your_First_Name'] || ''} ${data['Your_Last_Name'] || ''}`.trim() + ' (spouse)'],
+    [`${data['Spouse_First_Name'] || 'Spouse 2'} Backup Healthcare Agent`, data['Spouse2_Alternate_Agent_Name']],
+    ['Living Will — ' + (data['Your_First_Name'] || 'Spouse 1'), data['Living_Will_Spouse1'] ? `Option ${data['Living_Will_Spouse1']}` : null],
+    ['Living Will — ' + (data['Spouse_First_Name'] || 'Spouse 2'), data['Living_Will_Spouse2'] ? `Option ${data['Living_Will_Spouse2']}` : null],
     ['Submitted', new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })],
   ];
 
@@ -1170,8 +1379,36 @@ function showConfirmation(data) {
     if (!val) return;
     const row = document.createElement('div');
     row.className = 'summary-row';
-    row.innerHTML = `<span class="sum-label">${label}</span><span class="sum-val">${escapeHtml(String(val))}</span>`;
+    row.innerHTML = `<span class="sum-label">${escapeHtml(label)}</span><span class="sum-val">${escapeHtml(String(val))}</span>`;
     rows.appendChild(row);
+  });
+
+  // Build document checklist based on package
+  const docsList = document.getElementById('docsList');
+  docsList.innerHTML = '';
+  const docs = [
+    { name: data['Name_of_Trust'] || 'Family Revocable Living Trust', sub: 'Including Certification of Trust and Asset Transfer Instructions' },
+    { name: `Last Will & Testament — ${data['Your_First_Name'] || 'Spouse 1'} ${data['Your_Last_Name'] || ''}`.trim(), sub: 'Pour-over will' },
+    { name: `Last Will & Testament — ${data['Spouse_First_Name'] || 'Spouse 2'} ${data['Your_Last_Name'] || ''}`.trim(), sub: 'Pour-over will' },
+    { name: `Durable Power of Attorney — ${data['Your_First_Name'] || 'Spouse 1'} ${data['Your_Last_Name'] || ''}`.trim(), sub: 'Financial and legal authority' },
+    { name: `Durable Power of Attorney — ${data['Spouse_First_Name'] || 'Spouse 2'} ${data['Your_Last_Name'] || ''}`.trim(), sub: 'Financial and legal authority' },
+    { name: `Health Care Directive — ${data['Your_First_Name'] || 'Spouse 1'} ${data['Your_Last_Name'] || ''}`.trim(), sub: 'Healthcare POA and Living Will' },
+    { name: `Health Care Directive — ${data['Spouse_First_Name'] || 'Spouse 2'} ${data['Your_Last_Name'] || ''}`.trim(), sub: 'Healthcare POA and Living Will' },
+  ];
+
+  docs.forEach(d => {
+    const item = document.createElement('div');
+    item.className = 'doc-item';
+    item.innerHTML = `
+      <div class="doc-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      </div>
+      <div>
+        <div style="font-weight:600;font-size:13px;">${escapeHtml(d.name)}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${escapeHtml(d.sub)}</div>
+      </div>
+    `;
+    docsList.appendChild(item);
   });
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
