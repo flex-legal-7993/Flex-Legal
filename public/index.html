@@ -1234,6 +1234,7 @@ function appendBotMessage(text) {
   `;
   chatMessages.appendChild(wrap);
   scrollToBottom();
+  chatInput.focus();
 }
 
 function appendUserMessage(text) {
@@ -1287,7 +1288,7 @@ function escapeHtml(str) {
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-// ─── Send message ─────────────────────────────────────────────────────────────
+// ─── Send message (streaming) ─────────────────────────────────────────────────
 async function sendMessage() {
   const text = chatInput.value.trim();
   if (!text || isWaiting) return;
@@ -1299,29 +1300,80 @@ async function sendMessage() {
   showTyping();
 
   try {
-    const res = await fetch(`${BACKEND_URL}/chat`, {
+    const res = await fetch(`${BACKEND_URL}/chat-stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: conversationHistory })
     });
 
     if (!res.ok) throw new Error('Server error');
-    const data = await res.json();
 
     hideTyping();
 
-    if (data.complete && data.intakeData) {
-      // Intake complete — show confirmation
-      collectedData = data.intakeData;
-      conversationHistory.push({ role: 'assistant', content: data.reply });
-      appendBotMessage(data.reply);
-      advanceStage();
-      setTimeout(() => showConfirmation(data.intakeData), 1800);
-    } else {
-      conversationHistory.push({ role: 'assistant', content: data.reply });
-      appendBotMessage(data.reply);
-      advanceStage();
-      setWaiting(false);
+    // Create a streaming bubble
+    const wrap = document.createElement('div');
+    wrap.className = 'msg msg-bot';
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble-bot';
+    const av = document.createElement('div');
+    av.className = 'msg-av-bot';
+    av.textContent = 'FL';
+    wrap.appendChild(av);
+    wrap.appendChild(bubble);
+    chatMessages.appendChild(wrap);
+    scrollToBottom();
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullReply = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // keep incomplete line in buffer
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const jsonStr = line.slice(6).trim();
+        if (!jsonStr) continue;
+
+        let event;
+        try { event = JSON.parse(jsonStr); } catch { continue; }
+
+        if (event.type === 'text') {
+          fullReply += event.text;
+          // Don't show [INTAKE_COMPLETE] or JSON in the bubble
+          const displayText = fullReply.split('[INTAKE_COMPLETE]')[0].trim();
+          bubble.innerHTML = displayText.replace(/\n/g, '<br>');
+          scrollToBottom();
+
+        } else if (event.type === 'done') {
+          fullReply = event.reply;
+          bubble.innerHTML = fullReply.replace(/\n/g, '<br>');
+          conversationHistory.push({ role: 'assistant', content: fullReply });
+          advanceStage();
+          setWaiting(false);
+          scrollToBottom();
+
+        } else if (event.type === 'complete') {
+          // Intake complete
+          fullReply = event.reply;
+          bubble.innerHTML = fullReply.replace(/\n/g, '<br>');
+          conversationHistory.push({ role: 'assistant', content: fullReply });
+          collectedData = event.intakeData;
+          advanceStage();
+          scrollToBottom();
+          setTimeout(() => showConfirmation(event.intakeData), 1800);
+
+        } else if (event.type === 'error') {
+          bubble.innerHTML = 'Something went wrong. Please try again or call us at 801-899-3704.';
+          setWaiting(false);
+        }
+      }
     }
 
   } catch (err) {
@@ -1335,6 +1387,7 @@ function setWaiting(val) {
   isWaiting = val;
   chatInput.disabled = val;
   sendBtn.disabled = val;
+  if (!val) chatInput.focus();
 }
 
 // ─── Confirmation ─────────────────────────────────────────────────────────────

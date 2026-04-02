@@ -227,6 +227,63 @@ app.post('/chat', async (req, res) => {
   }
 });
 
+// ─── Chat Stream ──────────────────────────────────────────────────────────────
+app.post('/chat-stream', async (req, res) => {
+  const { messages } = req.body;
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  let fullText = '';
+
+  try {
+    const stream = anthropic.messages.stream({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 500,
+      system: SYSTEM_PROMPT,
+      messages
+    });
+
+    stream.on('text', (text) => {
+      fullText += text;
+      res.write(`data: ${JSON.stringify({ type: 'text', text })}\n\n`);
+    });
+
+    stream.on('finalMessage', () => {
+      if (fullText.includes('[INTAKE_COMPLETE]')) {
+        const parts = fullText.split('[INTAKE_COMPLETE]');
+        const closingMessage = parts[0].trim();
+        const jsonStr = parts[1].trim();
+        let intakeData;
+        try {
+          intakeData = JSON.parse(jsonStr);
+          generateAndEmail(intakeData).catch(err => console.error('Doc gen error:', err));
+          res.write(`data: ${JSON.stringify({ type: 'complete', reply: closingMessage, intakeData })}\n\n`);
+        } catch (e) {
+          console.error('JSON parse error in stream:', jsonStr);
+          res.write(`data: ${JSON.stringify({ type: 'done', reply: closingMessage })}\n\n`);
+        }
+      } else {
+        res.write(`data: ${JSON.stringify({ type: 'done', reply: fullText })}\n\n`);
+      }
+      res.end();
+    });
+
+    stream.on('error', (err) => {
+      console.error('Stream error:', err);
+      res.write(`data: ${JSON.stringify({ type: 'error', message: 'Stream error' })}\n\n`);
+      res.end();
+    });
+
+  } catch (err) {
+    console.error('Chat stream error:', err);
+    res.write(`data: ${JSON.stringify({ type: 'error', message: 'Failed to start stream' })}\n\n`);
+    res.end();
+  }
+});
+
 // ─── Document generation ──────────────────────────────────────────────────────
 async function generateAndEmail(data) {
   const templatePath = path.join(__dirname, 'templates', 'joint_trust.docx');
