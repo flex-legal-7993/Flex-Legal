@@ -197,7 +197,7 @@ If changes: ask what, fix, redisplay full summary, ask again. Repeat until confi
 
 When client confirms everything is correct, send this closing message:
 
-"Your intake is complete — thank you so much for taking the time to do this. Your family is lucky to have someone who takes estate planning seriously.
+"Your intake is complete — thank you so much for taking the time to complete this today.
 
 Here's what happens next:
 
