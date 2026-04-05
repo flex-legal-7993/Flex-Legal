@@ -294,6 +294,10 @@
     color: var(--text);
     background: var(--cream);
     transition: border-color 0.2s;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    max-height: 120px;
+    overflow-y: auto;
   }
   .chat-input:focus { border-color: var(--navy); background: var(--white); }
   .chat-input:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -968,7 +972,11 @@
         <div class="chat-title-name">Flex Legal Intake</div>
         <div class="chat-title-sub">Estate Planning — Attorney-Directed</div>
       </div>
-      <button class="back-nav" onclick="confirmStartOver()" title="Start over" style="margin-left:auto; gap:4px;">
+      <button class="back-nav" onclick="goBackOneMessage()" title="Go back one step" style="margin-left:auto; gap:4px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        Back
+      </button>
+      <button class="back-nav" onclick="confirmStartOver()" title="Start over" style="gap:4px; margin-left:8px;">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
         Start over
       </button>
@@ -977,8 +985,8 @@
     <div class="chat-messages" id="chatMessages"></div>
 
     <div class="chat-input-area">
-      <div class="input-row">
-        <input type="text" class="chat-input" id="chatInput" placeholder="Type your response here..." autocomplete="off" />
+      <div class="input-row" style="align-items:flex-end;">
+        <textarea class="chat-input" id="chatInput" placeholder="Type your response here..." autocomplete="off" rows="1" style="resize:none; overflow-y:hidden; line-height:1.5;"></textarea>
         <button class="send-btn" id="sendBtn" title="Send">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
@@ -1542,6 +1550,29 @@ async function init(clientInfo, selectedPackage) {
     setWaiting(false);
   }
 }
+
+// ─── Go back one message ──────────────────────────────────────────────────────
+function goBackOneMessage() {
+  if (conversationHistory.length < 2 || isWaiting) return;
+  // Remove last assistant message and last user message
+  const lastMsg = conversationHistory[conversationHistory.length - 1];
+  if (lastMsg.role === 'assistant') conversationHistory.pop();
+  if (conversationHistory.length > 0 && conversationHistory[conversationHistory.length - 1].role === 'user') {
+    conversationHistory.pop();
+  }
+  // Remove last two visible message bubbles from chat UI
+  const messages = chatMessages.querySelectorAll('.msg, .typing-wrap');
+  const arr = Array.from(messages);
+  if (arr.length >= 2) { arr[arr.length - 1].remove(); arr[arr.length - 2].remove(); }
+  else if (arr.length === 1) { arr[0].remove(); }
+  chatInput.focus();
+}
+
+// ─── Textarea auto-resize ─────────────────────────────────────────────────────
+chatInput.addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+});
 
 // ─── Event listeners ──────────────────────────────────────────────────────────
 sendBtn.addEventListener('click', sendMessage);
