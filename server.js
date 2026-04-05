@@ -108,19 +108,20 @@ Explain: the second part is the Living Will — it records end-of-life care wish
 2. Prolong life
 3. Do not prolong life (comfort care only — no CPR, feeding tubes, or dialysis; sub-options discussed at signing)
 4. No preference
-Then ask each spouse's preference as two separate clearly labeled questions — do NOT just say their names in sequence. For example:
-"[Name 1], which option would you prefer?"
-Wait for response, then:
-"And [Name 2], which option would you prefer?"
+Then ask each spouse's choice as two completely separate questions that make it unambiguous you are asking for their Living Will preference — NOT asking who goes first. For example:
+"[Name 1], which of these four options would you like for your Living Will?"
+Wait for their answer and acknowledge it. Then:
+"And [Name 2], which option would you like for your Living Will?"
+Never say "[Name 1] first, then [Name 2]" — that is confusing. Always phrase it as a direct question to each person about their own choice.
 Or they can say "discuss with attorney" for either.
 FLAG: "LIVING WILL — [Name 1]: Option [X or Deferred]. [Name 2]: Option [X or Deferred]. Client to initial at signing. If Option 3: sub-options must be discussed at signing."
 
 BUBBLE 4 — medical research and organ donation:
-Ask both questions clearly, and ask each spouse separately with labeled questions — do NOT just list names in sequence. For example:
-"[Name 1], would you like to authorize your agent to consent to medical research or clinical trials on your behalf? (Yes / No / Discuss with attorney)"
-Then: "[Name 2], same question for you?"
-Then: "[Name 1], would you like to authorize your agent to consent to organ donation? (Yes / No / Discuss with attorney)"
-Then: "[Name 2], same question for you?"
+Ask each question as a direct question to each person — never use "[Name 1] first, then [Name 2]" phrasing. Always make it clear you are asking for that specific person's preference. For example:
+"[Name 1], would you like to authorize your healthcare agent to consent to medical research or clinical trials on your behalf, even if you may not personally benefit? (Yes / No / Discuss with attorney)"
+Acknowledge their answer, then:
+"[Name 2], same question — would you like to authorize your healthcare agent to consent to medical research on your behalf?"
+Then repeat the same pattern for organ donation for each spouse.
 FLAG: "MEDICAL RESEARCH — [Name 1]: [answer]. [Name 2]: [answer]. ORGAN DONATION — [Name 1]: [answer]. [Name 2]: [answer]. Client to initial at signing."
 
 === SECTION 9: FINAL CONFIRMATION ===
