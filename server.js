@@ -177,7 +177,7 @@ app.post('/chat', async (req, res) => {
     const { messages } = req.body;
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 800,
+      max_tokens: 2000,
       system: SYSTEM_PROMPT,
       messages
     });
@@ -190,7 +190,8 @@ app.post('/chat', async (req, res) => {
       let intakeData;
       try { intakeData = JSON.parse(jsonStr); }
       catch (e) {
-        console.error('JSON parse error:', jsonStr);
+        console.error('JSON parse error — likely token limit cut off JSON. Length:', jsonStr.length, 'Error:', e.message);
+        console.error('JSON preview:', jsonStr.substring(0, 200));
         return res.json({ reply: closingMessage, complete: false });
       }
       generateAndEmail(intakeData).catch(err => console.error('Doc gen error:', err));
@@ -218,7 +219,7 @@ app.post('/chat-stream', async (req, res) => {
   try {
     const stream = anthropic.messages.stream({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 800,
+      max_tokens: 2000,
       system: SYSTEM_PROMPT,
       messages
     });
@@ -239,7 +240,8 @@ app.post('/chat-stream', async (req, res) => {
           generateAndEmail(intakeData).catch(err => console.error('Doc gen error:', err));
           res.write(`data: ${JSON.stringify({ type: 'complete', reply: closingMessage, intakeData })}\n\n`);
         } catch (e) {
-          console.error('JSON parse error in stream:', jsonStr);
+          console.error('Stream JSON parse error — likely token limit cut off JSON. Length:', jsonStr.length, 'Error:', e.message);
+          console.error('JSON preview:', jsonStr.substring(0, 200));
           res.write(`data: ${JSON.stringify({ type: 'done', reply: closingMessage })}\n\n`);
         }
       } else {
