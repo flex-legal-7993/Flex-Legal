@@ -986,7 +986,7 @@
 
     <div class="chat-input-area">
       <div class="input-row" style="align-items:flex-end;">
-        <textarea class="chat-input" id="chatInput" placeholder="Type your response here..." autocomplete="off" rows="1" style="resize:none; overflow-y:hidden; line-height:1.5;"></textarea>
+        <textarea class="chat-input" id="chatInput" placeholder="Type your response here..." autocomplete="off" rows="2" wrap="soft" style="resize:none; overflow-y:hidden; line-height:1.5; min-height:42px;"></textarea>
         <button class="send-btn" id="sendBtn" title="Send">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
@@ -1501,6 +1501,8 @@ consentBtn.addEventListener('click', () => {
   consentScreen.classList.add('hidden');
   document.getElementById('progressWrap').classList.remove('hidden');
   document.getElementById('chatCard').classList.remove('hidden');
+  // Initialize textarea height now that it's visible
+  setTimeout(() => resizeChatInput(), 50);
 
   // Start the chatbot with client info and selected package
   init(clientInfo, selectedPackage);
@@ -1569,10 +1571,12 @@ function goBackOneMessage() {
 }
 
 // ─── Textarea auto-resize ─────────────────────────────────────────────────────
-chatInput.addEventListener('input', function() {
-  this.style.height = 'auto';
-  this.style.height = Math.min(this.scrollHeight, 120) + 'px';
-});
+function resizeChatInput() {
+  chatInput.style.height = 'auto';
+  chatInput.style.height = Math.min(Math.max(chatInput.scrollHeight, 42), 120) + 'px';
+  chatInput.style.overflowY = chatInput.scrollHeight > 120 ? 'auto' : 'hidden';
+}
+chatInput.addEventListener('input', resizeChatInput);
 
 // ─── Event listeners ──────────────────────────────────────────────────────────
 sendBtn.addEventListener('click', sendMessage);
