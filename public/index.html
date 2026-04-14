@@ -988,7 +988,7 @@
       <div class="consent-header-eyebrow">Before You Begin</div>
       <div class="consent-header-title" id="consentHeaderTitle">Estate Planning Intake — Disclosure &amp; Consent</div>
     </div>
-    <div class="consent-body">
+    <div class="consent-body" id="consentBody">
 
       <div>
         <div class="consent-section-title">Nature of This Intake</div>
@@ -1329,12 +1329,66 @@ function proceedToConsent() {
   const trustType = getTrustType();
   const consentTitle = document.getElementById('consentHeaderTitle');
   const consentAgreeText = document.querySelector('.consent-agree-text');
+  const consentBodyEl = document.getElementById('consentBody');
+
   if (trustType === 'selfservice') {
     if (consentTitle) consentTitle.textContent = 'Document Builder — Disclosure & Acknowledgment';
     if (consentAgreeText) consentAgreeText.textContent = 'I understand this is a document preparation service only. No attorney-client relationship is created. I agree to review my completed document with a licensed attorney before signing.';
+    if (consentBodyEl) consentBodyEl.innerHTML = `
+      <div>
+        <div class="consent-section-title">Document Preparation Service</div>
+        <div class="consent-section-text">Flex Legal Services LLC is providing a document preparation service only. This service fills in legal document templates based on the information you provide. It does not constitute legal advice and does not create an attorney-client relationship.</div>
+      </div>
+      <div class="consent-divider"></div>
+      <div>
+        <div class="consent-section-title">No Attorney-Client Relationship</div>
+        <div class="consent-section-text">Using this service does not create an attorney-client relationship with Flex Legal Services LLC or any of its attorneys. The documents prepared are based solely on the information you provide and have not been reviewed by an attorney.</div>
+      </div>
+      <div class="consent-divider"></div>
+      <div>
+        <div class="consent-section-title">Review With an Attorney</div>
+        <div class="consent-section-text">We strongly recommend that you have a licensed attorney review your completed documents before signing them. Laws vary by state and individual circumstances vary — an attorney can ensure your documents are appropriate for your specific situation.</div>
+      </div>
+      <div class="consent-divider"></div>
+      <div>
+        <div class="consent-section-title">Use of AI Technology</div>
+        <div class="consent-section-text">This service uses an AI system to collect your information and populate your documents. Your information is processed through Anthropic's commercial API under enterprise terms that prohibit use of your data for AI training. No information you provide is shared with third parties.</div>
+      </div>
+      <div class="consent-divider"></div>
+      <div>
+        <div class="consent-section-title">Utah Documents</div>
+        <div class="consent-section-text">The documents prepared by this service are designed for use in the State of Utah. They may not be valid or appropriate in other states. If you reside outside Utah, consult a licensed attorney in your state before using these documents.</div>
+      </div>
+      <div class="consent-divider"></div>
+      <div class="consent-agree-row">
+        <input type="checkbox" class="consent-checkbox" id="consentCheckbox" />
+        <label for="consentCheckbox" class="consent-agree-text">I understand this is a document preparation service only. No attorney-client relationship is created. I agree to review my completed document with a licensed attorney before signing.</label>
+      </div>
+      <button class="consent-btn" id="consentBtn" disabled>Continue to Document Builder</button>
+      <div class="consent-timestamp">Flex Legal Services LLC &mdash; Document Preparation Service &mdash; <span id="consentDateDisplay"></span></div>
+    `;
+    // Re-attach event listeners after innerHTML swap
+    const newCheckbox = document.getElementById('consentCheckbox');
+    const newBtn = document.getElementById('consentBtn');
+    const newDateDisplay = document.getElementById('consentDateDisplay');
+    if (newDateDisplay) newDateDisplay.textContent = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    if (newCheckbox) newCheckbox.addEventListener('change', () => { if (newBtn) newBtn.disabled = !newCheckbox.checked; });
+    if (newBtn) newBtn.addEventListener('click', () => {
+      if (!newCheckbox || !newCheckbox.checked) return;
+      document.getElementById('consentScreen').classList.add('hidden');
+      const prices = { 'POA — Self-Service': '$129', 'Healthcare Directive — Self-Service': '$129', 'Will — Self-Service': '$129', 'All Three Documents — Self-Service': '$299' };
+      const titles = { 'POA — Self-Service': 'Financial Power of Attorney', 'Healthcare Directive — Self-Service': 'Healthcare Directive', 'Will — Self-Service': 'Pour-Over Will', 'All Three Documents — Self-Service': 'All Three Documents — Bundle' };
+      document.getElementById('paymentTitle').textContent = titles[selectedPackage] || selectedPackage;
+      document.getElementById('paymentPrice').textContent = prices[selectedPackage] || '$129';
+      document.getElementById('paymentScreen').classList.remove('hidden');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
   } else {
     if (consentTitle) consentTitle.textContent = 'Estate Planning Intake — Disclosure & Consent';
     if (consentAgreeText) consentAgreeText.textContent = 'I have read and understood the above disclosure. I consent to proceed with the attorney-directed AI intake and to the establishment of an attorney-client relationship with Flex Legal Services LLC.';
+    // Restore button text for attorney flow
+    const consentBtnEl = document.getElementById('consentBtn');
+    if (consentBtnEl) consentBtnEl.textContent = 'Begin My Estate Plan';
   }
 
   document.getElementById('pkgScreen').classList.add('hidden');
