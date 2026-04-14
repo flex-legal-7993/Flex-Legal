@@ -765,6 +765,56 @@
   }
   .start-over-btn:hover { color: var(--navy); }
 
+  /* Self-service section */
+  .pkg-section-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 4px 0;
+  }
+  .pkg-section-divider-line {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  .pkg-section-divider-text {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    white-space: nowrap;
+  }
+  .pkg-card-price {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--gold-dark);
+    margin-top: 4px;
+  }
+  .pkg-card.selfservice { border-color: var(--gold-light); }
+  .pkg-card.selfservice:hover { border-color: var(--gold-dark); }
+  .pkg-card.selfservice.selected { border-color: var(--gold-dark); box-shadow: 0 2px 12px rgba(201,168,76,0.2); }
+  .pkg-card.selfservice.selected .pkg-radio { border-color: var(--gold-dark); background: var(--gold-dark); }
+  .pkg-card.selfservice.selected .pkg-card-title { color: var(--gold-dark); }
+
+  /* Payment screen */
+  .payment-screen { display: flex; flex-direction: column; gap: 16px; }
+  .payment-screen.hidden { display: none !important; }
+  .payment-hero { background: var(--navy); border-radius: 14px; padding: 24px 26px; }
+  .payment-hero-eyebrow { font-size: 11px; color: var(--gold); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; margin-bottom: 8px; }
+  .payment-hero-title { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--white); font-weight: 500; margin-bottom: 6px; }
+  .payment-hero-price { font-size: 28px; font-weight: 700; color: var(--gold); margin-bottom: 8px; }
+  .payment-hero-body { font-size: 13px; color: rgba(255,255,255,0.7); line-height: 1.5; }
+  .payment-card { background: var(--white); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+  .payment-card-header { padding: 14px 18px; background: var(--cream-dark); border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .payment-card-body { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+  .payment-placeholder { background: var(--cream); border: 2px dashed var(--border); border-radius: 10px; padding: 24px; text-align: center; }
+  .payment-placeholder-icon { font-size: 28px; margin-bottom: 8px; }
+  .payment-placeholder-text { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+  .payment-btn { width: 100%; padding: 13px; background: var(--gold-dark); color: var(--white); border: none; border-radius: 8px; font-size: 14px; font-weight: 600; font-family: 'Source Sans 3', sans-serif; cursor: pointer; transition: background 0.2s; letter-spacing: 0.02em; }
+  .payment-btn:hover { background: var(--gold); }
+  .payment-disclaimer { font-size: 11px; color: var(--text-light); text-align: center; line-height: 1.6; }
+
   /* Utility */
   .hidden { display: none !important; }
   
@@ -841,21 +891,62 @@
         </div>
       </div>
 
-      <div class="pkg-card" id="pkg-poa" onclick="selectPackage('Financial Power of Attorney', this)">
-        <div class="pkg-radio"><div class="pkg-radio-dot"></div></div>
-        <div class="pkg-card-content">
-          <div class="pkg-card-title">Financial Power of Attorney</div>
-          <div class="pkg-card-desc">Appoint a trusted person to manage your financial affairs if you become incapacitated or unavailable.</div>
-          <div class="pkg-card-includes">Includes: Durable Financial Power of Attorney &middot; Agent authorization language</div>
-        </div>
-      </div>
-
       <div class="pkg-card" id="pkg-sns" onclick="selectPackage('Special Needs Trust', this)">
         <div class="pkg-radio"><div class="pkg-radio-dot"></div></div>
         <div class="pkg-card-content">
           <div class="pkg-card-title">Special Needs Trust</div>
           <div class="pkg-card-desc">Protect a loved one with a disability by ensuring their inheritance doesn't disqualify them from government benefits.</div>
           <div class="pkg-card-includes">Includes: Special Needs Trust Agreement &middot; Attorney consultation on benefits preservation</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Self-service divider -->
+    <div class="pkg-section-divider">
+      <div class="pkg-section-divider-line"></div>
+      <div class="pkg-section-divider-text">Self-Service Documents — Build Your Own</div>
+      <div class="pkg-section-divider-line"></div>
+    </div>
+    <div class="pkg-grid">
+
+      <div class="pkg-card selfservice" id="pkg-ss-poa" onclick="selectPackage('POA — Self-Service', this)">
+        <div class="pkg-radio"><div class="pkg-radio-dot"></div></div>
+        <div class="pkg-card-content">
+          <div class="pkg-card-title">Financial Power of Attorney</div>
+          <div class="pkg-card-desc">Prepare your own Financial POA. You'll answer a few questions and receive your completed document by email.</div>
+          <div class="pkg-card-includes">Not attorney-reviewed &middot; Review with an attorney before signing</div>
+          <div class="pkg-card-price">$129</div>
+        </div>
+      </div>
+
+      <div class="pkg-card selfservice" id="pkg-ss-hcd" onclick="selectPackage('Healthcare Directive — Self-Service', this)">
+        <div class="pkg-radio"><div class="pkg-radio-dot"></div></div>
+        <div class="pkg-card-content">
+          <div class="pkg-card-title">Healthcare Directive</div>
+          <div class="pkg-card-desc">Prepare your own Healthcare Directive. Name a healthcare agent and record your end-of-life wishes.</div>
+          <div class="pkg-card-includes">Not attorney-reviewed &middot; Review with an attorney before signing</div>
+          <div class="pkg-card-price">$129</div>
+        </div>
+      </div>
+
+      <div class="pkg-card selfservice" id="pkg-ss-will" onclick="selectPackage('Will — Self-Service', this)">
+        <div class="pkg-radio"><div class="pkg-radio-dot"></div></div>
+        <div class="pkg-card-content">
+          <div class="pkg-card-title">Pour-Over Will</div>
+          <div class="pkg-card-desc">Prepare your own Pour-Over Will. Directs any assets outside your trust into your trust at death.</div>
+          <div class="pkg-card-includes">Requires an existing trust &middot; Not attorney-reviewed &middot; Review with an attorney before signing</div>
+          <div class="pkg-card-price">$129</div>
+        </div>
+      </div>
+
+      <div class="pkg-card selfservice" id="pkg-ss-bundle" onclick="selectPackage('All Three Documents — Self-Service', this)">
+        <div class="pkg-radio"><div class="pkg-radio-dot"></div></div>
+        <div class="pkg-card-content">
+          <div class="pkg-card-title">All Three Documents — Bundle</div>
+          <div class="pkg-card-desc">Financial POA, Healthcare Directive, and Pour-Over Will — all three in one package.</div>
+          <div class="pkg-card-includes">Not attorney-reviewed &middot; Review with an attorney before signing</div>
+          <div class="pkg-card-price">$299 <span style="font-size:11px;font-weight:400;color:var(--text-light);">Save $88</span></div>
         </div>
       </div>
 
@@ -895,7 +986,7 @@
         Back to package selection
       </button>
       <div class="consent-header-eyebrow">Before You Begin</div>
-      <div class="consent-header-title">Estate Planning Intake — Disclosure &amp; Consent</div>
+      <div class="consent-header-title" id="consentHeaderTitle">Estate Planning Intake — Disclosure &amp; Consent</div>
     </div>
     <div class="consent-body">
 
@@ -952,6 +1043,31 @@
     </div>
   </div>
 
+  <!-- Payment screen (self-service only) -->
+  <div class="payment-screen hidden" id="paymentScreen">
+    <button class="back-nav" onclick="goBackToConsent()" style="margin-bottom:4px;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Back
+    </button>
+    <div class="payment-hero">
+      <div class="payment-hero-eyebrow">Secure Checkout</div>
+      <div class="payment-hero-title" id="paymentTitle">Financial Power of Attorney</div>
+      <div class="payment-hero-price" id="paymentPrice">$129</div>
+      <div class="payment-hero-body">Your document will be emailed to you immediately after completing the questionnaire.</div>
+    </div>
+    <div class="payment-card">
+      <div class="payment-card-header">Payment</div>
+      <div class="payment-card-body">
+        <div class="payment-placeholder">
+          <div class="payment-placeholder-icon">💳</div>
+          <div class="payment-placeholder-text">Payment processing coming soon.<br>For now, click below to proceed — you will be invoiced separately.</div>
+        </div>
+        <button class="payment-btn" id="paymentBtn" onclick="proceedAfterPayment()">Continue to Document Builder →</button>
+        <div class="payment-disclaimer">By continuing you acknowledge this is a document preparation service only. No attorney-client relationship is created. We recommend reviewing your completed document with a licensed attorney before signing.</div>
+      </div>
+    </div>
+  </div>
+
   <!-- Progress bar -->
   <div class="progress-wrap hidden" id="progressWrap">
     <div class="progress-meta">
@@ -1001,7 +1117,7 @@
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
       </div>
       <div class="confirm-title" id="confirmTitle">Thank you — we've received your information</div>
-      <div class="confirm-body">Your intake has been submitted to Flex Legal Services. Our team will review your information and prepare your draft documents.</div>
+      <div class="confirm-body" id="confirmBody">Your intake has been submitted to Flex Legal Services. Our team will review your information and prepare your draft documents.</div>
     </div>
 
     <!-- IMPORTANT warning -->
@@ -1088,13 +1204,39 @@
 
 <script>
 // ─── Trust type tracking ──────────────────────────────────────────────────────
-// Derived from selectedPackage — 'single' for single trust, 'joint' for everything else
 function getTrustType() {
-  return selectedPackage === 'Complete Estate Plan — Single' ? 'single' : 'joint';
+  if (selectedPackage === 'Complete Estate Plan — Single') return 'single';
+  if (selectedPackage === 'Special Needs Trust') return 'standalone';
+  if (selectedPackage === 'POA — Self-Service') return 'selfservice';
+  if (selectedPackage === 'Healthcare Directive — Self-Service') return 'selfservice';
+  if (selectedPackage === 'Will — Self-Service') return 'selfservice';
+  if (selectedPackage === 'All Three Documents — Self-Service') return 'selfservice';
+  return 'joint';
+}
+
+// Which docs does a self-service package include
+function getSelfServiceDocs() {
+  if (selectedPackage === 'POA — Self-Service') return { dpoa: true, hcd: false, will: false };
+  if (selectedPackage === 'Healthcare Directive — Self-Service') return { dpoa: false, hcd: true, will: false };
+  if (selectedPackage === 'Will — Self-Service') return { dpoa: false, hcd: false, will: true };
+  if (selectedPackage === 'All Three Documents — Self-Service') return { dpoa: true, hcd: true, will: true };
+  return { dpoa: false, hcd: false, will: false };
 }
 
 // ─── Back navigation ─────────────────────────────────────────────────────────
-function goBackToPackages() {
+function goBackToConsent() {
+  document.getElementById('paymentScreen').classList.add('hidden');
+  document.getElementById('consentScreen').classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function proceedAfterPayment() {
+  document.getElementById('paymentScreen').classList.add('hidden');
+  document.getElementById('progressWrap').classList.remove('hidden');
+  document.getElementById('chatCard').classList.remove('hidden');
+  setTimeout(() => resizeChatInput(), 50);
+  init(clientInfo, selectedPackage, '/start-selfservice');
+}
   document.getElementById('consentScreen').classList.add('hidden');
   document.getElementById('pkgScreen').classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1135,6 +1277,7 @@ function confirmStartOver() {
   document.getElementById('chatCard').classList.add('hidden');
   document.getElementById('progressWrap').classList.add('hidden');
   document.getElementById('consentScreen').classList.add('hidden');
+  document.getElementById('paymentScreen').classList.add('hidden');
   document.getElementById('pkgScreen').classList.remove('hidden');
 
   setWaiting(false);
@@ -1179,6 +1322,18 @@ function proceedToConsent() {
   if (!selectedPackage || !valid) return;
 
   clientInfo = { name, email, phone, package: selectedPackage };
+
+  // Customize consent screen based on package type
+  const trustType = getTrustType();
+  const consentTitle = document.getElementById('consentHeaderTitle');
+  const consentAgreeText = document.querySelector('.consent-agree-text');
+  if (trustType === 'selfservice') {
+    if (consentTitle) consentTitle.textContent = 'Document Builder — Disclosure & Acknowledgment';
+    if (consentAgreeText) consentAgreeText.textContent = 'I understand this is a document preparation service only. No attorney-client relationship is created. I agree to review my completed document with a licensed attorney before signing.';
+  } else {
+    if (consentTitle) consentTitle.textContent = 'Estate Planning Intake — Disclosure & Consent';
+    if (consentAgreeText) consentAgreeText.textContent = 'I have read and understood the above disclosure. I consent to proceed with the attorney-directed AI intake and to the establishment of an attorney-client relationship with Flex Legal Services LLC.';
+  }
 
   document.getElementById('pkgScreen').classList.add('hidden');
   document.getElementById('consentScreen').classList.remove('hidden');
@@ -1398,15 +1553,48 @@ function showConfirmation(data) {
   screen.classList.add('visible');
 
   const firstName = data['Your_First_Name'] || 'there';
-  document.getElementById('confirmTitle').textContent = `Thank you, ${firstName} — we've received your information`;
+  document.getElementById('confirmTitle').textContent = isSelfService
+    ? `Thank you, ${firstName} — your document is on its way`
+    : `Thank you, ${firstName} — we've received your information`;
+  document.getElementById('confirmBody').textContent = isSelfService
+    ? `Your completed document will be emailed to ${data['client_email'] || clientInfo.email || 'you'} shortly. Please review it carefully and consult a licensed attorney before signing.`
+    : `Your intake has been submitted to Flex Legal Services. Our team will review your information and prepare your draft documents.`;
 
   const rows = document.getElementById('summaryRows');
   rows.innerHTML = '';
 
   const isSingle = getTrustType() === 'single';
+  const isStandalone = getTrustType() === 'standalone';
+  const isSelfService = getTrustType() === 'selfservice';
 
   let fields;
-  if (isSingle) {
+  if (isSelfService) {
+    fields = [
+      ['Documents', [data['needs_dpoa'] ? 'Financial POA' : null, data['needs_will'] ? 'Pour-Over Will' : null, data['needs_hcd'] ? 'Healthcare Directive' : null].filter(Boolean).join(', ')],
+      data['needs_dpoa'] ? ['Financial POA Agent', data['DPOA_Agent_Name']] : null,
+      data['needs_will'] ? ['Trust Name', data['Name_of_Trust']] : null,
+      data['needs_will'] ? ['Personal Representative', data['First_Choice_Successor_Trustee']] : null,
+      data['needs_hcd'] ? ['Primary Healthcare Agent', data['Agent_Name']] : null,
+      data['needs_hcd'] ? ['Backup Healthcare Agent', data['Alternate_Agent_Name']] : null,
+      data['needs_hcd'] ? ['Living Will', data['Living_Will'] ? `Option ${data['Living_Will']}` : null] : null,
+      ['Document sent to', data['client_email'] || clientInfo.email || ''],
+      ['Submitted', new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })],
+    ].filter(Boolean);
+  } else if (isStandalone) {
+    // Standalone docs summary — show only what was selected
+    fields = [
+      ['Documents', [data['needs_dpoa'] ? 'Financial POA' : null, data['needs_will'] ? 'Pour-Over Will' : null, data['needs_hcd'] ? 'Healthcare Directive' : null].filter(Boolean).join(', ')],
+      data['needs_dpoa'] ? ['Financial POA Agent', data['DPOA_Agent_Name']] : null,
+      data['needs_dpoa'] ? ['POA Backup Agent', data['First_Choice_Successor_Trustee']] : null,
+      data['needs_will'] ? ['Trust Name', data['Name_of_Trust']] : null,
+      data['needs_will'] ? ['Successor Trustee', data['First_Choice_Successor_Trustee']] : null,
+      data['needs_will'] ? ['Children', data['Full_Legal_Names_of_Children']] : null,
+      data['needs_hcd'] ? ['Primary Healthcare Agent', data['Agent_Name']] : null,
+      data['needs_hcd'] ? ['Backup Healthcare Agent', data['Alternate_Agent_Name']] : null,
+      data['needs_hcd'] ? ['Living Will', data['Living_Will'] ? `Option ${data['Living_Will']}` : null] : null,
+      ['Submitted', new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })],
+    ].filter(Boolean);
+  } else if (isSingle) {
     // Single trust summary fields
     fields = [
       ['Trust Name', data['Name_of_Trust']],
@@ -1456,7 +1644,12 @@ function showConfirmation(data) {
   const docsList = document.getElementById('docsList');
   docsList.innerHTML = '';
   let docs;
-  if (isSingle) {
+  if (isSelfService || isStandalone) {
+    docs = [];
+    if (data['needs_dpoa']) docs.push({ name: `Durable Power of Attorney — ${data['Your_First_Name'] || ''} ${data['Your_Last_Name'] || ''}`.trim(), sub: isSelfService ? 'Self-prepared — review with attorney before signing' : 'Financial and legal authority' });
+    if (data['needs_will']) docs.push({ name: `Last Will & Testament — ${data['Your_First_Name'] || ''} ${data['Your_Last_Name'] || ''}`.trim(), sub: isSelfService ? 'Self-prepared — review with attorney before signing' : 'Pour-over will' });
+    if (data['needs_hcd']) docs.push({ name: `Health Care Directive — ${data['Your_First_Name'] || ''} ${data['Your_Last_Name'] || ''}`.trim(), sub: isSelfService ? 'Self-prepared — review with attorney before signing' : 'Healthcare POA and Living Will' });
+  } else if (isSingle) {
     docs = [
       { name: data['Name_of_Trust'] || 'Revocable Living Trust', sub: 'Including Certification of Trust and Asset Transfer Instructions' },
       { name: `Last Will & Testament — ${data['Your_First_Name'] || ''} ${data['Your_Last_Name'] || ''}`.trim(), sub: 'Pour-over will' },
@@ -1511,20 +1704,53 @@ consentBtn.addEventListener('click', () => {
   const consentTime = new Date().toISOString();
   console.log('Consent given at:', consentTime);
 
+  const trustType = getTrustType();
+
+  if (trustType === 'selfservice') {
+    // Show payment screen instead of chat
+    consentScreen.classList.add('hidden');
+    const prices = {
+      'POA — Self-Service': '$129',
+      'Healthcare Directive — Self-Service': '$129',
+      'Will — Self-Service': '$129',
+      'All Three Documents — Self-Service': '$299'
+    };
+    const titles = {
+      'POA — Self-Service': 'Financial Power of Attorney',
+      'Healthcare Directive — Self-Service': 'Healthcare Directive',
+      'Will — Self-Service': 'Pour-Over Will',
+      'All Three Documents — Self-Service': 'All Three Documents — Bundle'
+    };
+    document.getElementById('paymentTitle').textContent = titles[selectedPackage] || selectedPackage;
+    document.getElementById('paymentPrice').textContent = prices[selectedPackage] || '$129';
+    document.getElementById('paymentScreen').classList.remove('hidden');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
+
+  // Attorney-directed flow
   consentScreen.classList.add('hidden');
   document.getElementById('progressWrap').classList.remove('hidden');
   document.getElementById('chatCard').classList.remove('hidden');
   setTimeout(() => resizeChatInput(), 50);
 
-  // Use /start-single for single trust, /start for everything else
-  const startEndpoint = getTrustType() === 'single' ? '/start-single' : '/start';
+  const startEndpoint = trustType === 'single' ? '/start-single' : trustType === 'standalone' ? '/start-standalone' : '/start';
   init(clientInfo, selectedPackage, startEndpoint);
 });
 
-// ─── Init ─────────────────────────────────────────────────────────────────────
 async function init(clientInfo, selectedPackage, startEndpoint) {
   setWaiting(true);
   showTyping();
+
+  // For self-service, build the doc flags to pass to the chatbot
+  const trustType = getTrustType();
+  let extraContext = '';
+  if (trustType === 'selfservice') {
+    const docs = getSelfServiceDocs();
+    const clientEmail = clientInfo.email || '';
+    extraContext = `\n\n[SYSTEM: Client selected "${selectedPackage}". needs_dpoa=${docs.dpoa}, needs_will=${docs.will}, needs_hcd=${docs.hcd}. Client email for document delivery: ${clientEmail}. Use these flags to skip irrelevant sections.]`;
+  }
+
   try {
     const res = await fetch(`${BACKEND_URL}${startEndpoint}`, {
       method: 'POST',
@@ -1543,12 +1769,13 @@ async function init(clientInfo, selectedPackage, startEndpoint) {
         setTimeout(() => {
           hideTyping();
           appendBotMessage(data.bubble2);
-          conversationHistory.push({ role: 'assistant', content: data.combinedForHistory || data.bubble1 + '\n\n' + data.bubble2 });
+          const historyContent = (data.combinedForHistory || data.bubble1 + '\n\n' + data.bubble2) + extraContext;
+          conversationHistory.push({ role: 'assistant', content: historyContent });
           setWaiting(false);
         }, 1200);
       }, 600);
     } else {
-      conversationHistory.push({ role: 'assistant', content: data.reply });
+      conversationHistory.push({ role: 'assistant', content: (data.reply || '') + extraContext });
       setWaiting(false);
     }
 
@@ -1556,9 +1783,9 @@ async function init(clientInfo, selectedPackage, startEndpoint) {
     hideTyping();
     const firstName = clientInfo && clientInfo.name ? clientInfo.name.split(' ')[0] : '';
     const greeting = firstName ? `Hi ${firstName}!` : 'Welcome to Flex Legal Services.';
-    const fallback = `${greeting} I'm here to help prepare your ${selectedPackage || 'estate planning documents'}. Everything you share is confidential and protected under attorney-client privilege.\n\nLet's get started — what is your full legal name as it should appear on your documents?`;
+    const fallback = `${greeting} I'm here to help prepare your ${selectedPackage || 'documents'}. Everything you share is confidential.\n\nLet's get started — what is your full legal name as it should appear on your documents?`;
     appendBotMessage(fallback);
-    conversationHistory.push({ role: 'assistant', content: fallback });
+    conversationHistory.push({ role: 'assistant', content: fallback + extraContext });
     setWaiting(false);
   }
 }
