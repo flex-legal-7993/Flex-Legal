@@ -790,7 +790,7 @@
 
 <main class="main">
 
-  <!-- Intro card (hidden — replaced by package selection screen) -->
+  <!-- Intro card (hidden) -->
   <div class="intro-card hidden" id="introCard">
     <div class="intro-eyebrow">Confidential &amp; Secure</div>
     <div class="intro-title">Your Estate Plan Starts Here</div>
@@ -953,7 +953,6 @@
   </div>
 
   <!-- Progress bar -->
-
   <div class="progress-wrap hidden" id="progressWrap">
     <div class="progress-meta">
       <span id="progressLabel">Getting started</span>
@@ -1088,9 +1087,14 @@
 </main>
 
 <script>
+// ─── Trust type tracking ──────────────────────────────────────────────────────
+// Derived from selectedPackage — 'single' for single trust, 'joint' for everything else
+function getTrustType() {
+  return selectedPackage === 'Complete Estate Plan — Single' ? 'single' : 'joint';
+}
+
 // ─── Back navigation ─────────────────────────────────────────────────────────
 function goBackToPackages() {
-  // Hide consent, show package selection
   document.getElementById('consentScreen').classList.add('hidden');
   document.getElementById('pkgScreen').classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1100,14 +1104,12 @@ function confirmStartOver() {
   if (conversationHistory.length > 1) {
     if (!confirm('Are you sure you want to start over? Your current progress will be lost.')) return;
   }
-  // Reset everything and go back to package selection
   conversationHistory = [];
   collectedData = {};
   currentStage = 0;
   selectedPackage = null;
   clientInfo = {};
 
-  // Reset progress bar
   const fill = document.getElementById('progressFill');
   const label = document.getElementById('progressLabel');
   const pct = document.getElementById('progressPct');
@@ -1115,11 +1117,9 @@ function confirmStartOver() {
   if (label) label.textContent = 'Getting started';
   if (pct) pct.textContent = '0%';
 
-  // Clear chat messages
   const msgs = document.getElementById('chatMessages');
   if (msgs) msgs.innerHTML = '';
 
-  // Reset form fields
   const nameEl = document.getElementById('clientName');
   const emailEl = document.getElementById('clientEmail');
   const phoneEl = document.getElementById('clientPhone');
@@ -1127,11 +1127,9 @@ function confirmStartOver() {
   if (emailEl) emailEl.value = '';
   if (phoneEl) phoneEl.value = '';
 
-  // Deselect all package cards
   document.querySelectorAll('.pkg-card').forEach(c => c.classList.remove('selected'));
   document.getElementById('pkgContinueBtn').disabled = true;
 
-  // Hide all screens, show package selection
   document.getElementById('confirmScreen').classList.remove('visible');
   document.getElementById('confirmScreen').classList.add('hidden');
   document.getElementById('chatCard').classList.add('hidden');
@@ -1139,9 +1137,7 @@ function confirmStartOver() {
   document.getElementById('consentScreen').classList.add('hidden');
   document.getElementById('pkgScreen').classList.remove('hidden');
 
-  // Re-enable input
   setWaiting(false);
-
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -1150,9 +1146,7 @@ let selectedPackage = null;
 let clientInfo = {};
 
 function selectPackage(packageName, cardEl) {
-  // Deselect all cards
   document.querySelectorAll('.pkg-card').forEach(c => c.classList.remove('selected'));
-  // Select clicked card
   cardEl.classList.add('selected');
   selectedPackage = packageName;
   updatePkgContinueBtn();
@@ -1166,7 +1160,6 @@ function updatePkgContinueBtn() {
   document.getElementById('pkgContinueBtn').disabled = !valid;
 }
 
-// Live validation on contact form inputs
 ['clientName','clientEmail','clientPhone'].forEach(id => {
   document.getElementById(id).addEventListener('input', updatePkgContinueBtn);
 });
@@ -1176,9 +1169,8 @@ function proceedToConsent() {
   const email = document.getElementById('clientEmail').value.trim();
   const phone = document.getElementById('clientPhone').value.trim();
 
-  // Validate
   let valid = true;
-  if (!name)  { document.getElementById('nameError').classList.add('visible');  valid = false; } 
+  if (!name)  { document.getElementById('nameError').classList.add('visible');  valid = false; }
   else          document.getElementById('nameError').classList.remove('visible');
   if (!email || !email.includes('@')) { document.getElementById('emailError').classList.add('visible'); valid = false; }
   else          document.getElementById('emailError').classList.remove('visible');
@@ -1186,24 +1178,21 @@ function proceedToConsent() {
   else          document.getElementById('phoneError').classList.remove('visible');
   if (!selectedPackage || !valid) return;
 
-  // Store client info
   clientInfo = { name, email, phone, package: selectedPackage };
 
-  // Hide package screen, show consent screen
   document.getElementById('pkgScreen').classList.add('hidden');
   document.getElementById('consentScreen').classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // ─── Configuration ───────────────────────────────────────────────────────────
-const BACKEND_URL = 'https://flex-legal-intake.onrender.com'; // Updated during deployment
+const BACKEND_URL = 'https://flex-legal-intake.onrender.com';
 
 // ─── State ───────────────────────────────────────────────────────────────────
 let conversationHistory = [];
 let collectedData = {};
 let isWaiting = false;
 
-// Progress stages
 const STAGES = [
   { label: 'Getting started', pct: 5 },
   { label: 'Basic information', pct: 20 },
@@ -1296,7 +1285,7 @@ function escapeHtml(str) {
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-// ─── Send message (streaming) ─────────────────────────────────────────────────
+// ─── Send message ─────────────────────────────────────────────────────────────
 async function sendMessage() {
   const text = chatInput.value.trim();
   if (!text || isWaiting) return;
@@ -1311,14 +1300,16 @@ async function sendMessage() {
     const res = await fetch(`${BACKEND_URL}/chat-stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: conversationHistory })
+      body: JSON.stringify({
+        messages: conversationHistory,
+        trustType: getTrustType()           // ← passes 'single' or 'joint'
+      })
     });
 
     if (!res.ok) throw new Error('Server error');
 
     hideTyping();
 
-    // Create a streaming bubble
     const wrap = document.createElement('div');
     wrap.className = 'msg msg-bot';
     const bubble = document.createElement('div');
@@ -1342,7 +1333,7 @@ async function sendMessage() {
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
-      buffer = lines.pop(); // keep incomplete line in buffer
+      buffer = lines.pop();
 
       for (const line of lines) {
         if (!line.startsWith('data: ')) continue;
@@ -1354,7 +1345,6 @@ async function sendMessage() {
 
         if (event.type === 'text') {
           fullReply += event.text;
-          // Don't show [INTAKE_COMPLETE] or JSON in the bubble
           const displayText = fullReply.split('[INTAKE_COMPLETE]')[0].trim();
           bubble.innerHTML = displayText.replace(/\n/g, '<br>');
           scrollToBottom();
@@ -1368,7 +1358,6 @@ async function sendMessage() {
           scrollToBottom();
 
         } else if (event.type === 'complete') {
-          // Intake complete
           fullReply = event.reply;
           bubble.innerHTML = fullReply.replace(/\n/g, '<br>');
           conversationHistory.push({ role: 'assistant', content: fullReply });
@@ -1404,37 +1393,56 @@ function showConfirmation(data) {
   document.getElementById('progressWrap').classList.add('hidden');
   document.getElementById('introCard').classList.add('hidden');
 
-  // Fix flash: remove hidden first, then add visible
   const screen = document.getElementById('confirmScreen');
   screen.classList.remove('hidden');
   screen.classList.add('visible');
 
-  // Set title
   const firstName = data['Your_First_Name'] || 'there';
   document.getElementById('confirmTitle').textContent = `Thank you, ${firstName} — we've received your information`;
 
-  // Build summary rows
   const rows = document.getElementById('summaryRows');
   rows.innerHTML = '';
-  const spouseName = data['Spouse_First_Name'] ? `${data['Spouse_First_Name']} ${data['Your_Last_Name'] || ''}`.trim() : null;
-  const fields = [
-    ['Trust Name', data['Name_of_Trust']],
-    ['Trustor 1', `${data['Your_First_Name'] || ''} ${data['Your_Last_Name'] || ''}`.trim()],
-    ['Trustor 2', spouseName],
-    ['Children', data['Full_Legal_Names_of_Children']],
-    ['First Choice Successor Trustee', data['First_Choice_Successor_Trustee']],
-    ['Second Choice Successor Trustee', data['Second_Choice_Successor_Trustee']],
-    ['Guardian Arrangement', data['Guardian_Option'] === 'B' ? `Option B — ${data['First_Choice_Guardian'] || ''}` : 'Option A — same as successor trustees'],
-    ['Financial Agent', data['Financial_Agent_Primary']],
-    ['Backup Financial Agent', data['Financial_Agent_Backup']],
-    [`${data['Your_First_Name'] || 'Spouse 1'} Healthcare Agent`, spouseName ? `${spouseName} (spouse)` : null],
-    [`${data['Your_First_Name'] || 'Spouse 1'} Backup Healthcare Agent`, data['Alternate_Agent_Name']],
-    [`${data['Spouse_First_Name'] || 'Spouse 2'} Healthcare Agent`, `${data['Your_First_Name'] || ''} ${data['Your_Last_Name'] || ''}`.trim() + ' (spouse)'],
-    [`${data['Spouse_First_Name'] || 'Spouse 2'} Backup Healthcare Agent`, data['Spouse2_Alternate_Agent_Name']],
-    ['Living Will — ' + (data['Your_First_Name'] || 'Spouse 1'), data['Living_Will_Spouse1'] ? `Option ${data['Living_Will_Spouse1']}` : null],
-    ['Living Will — ' + (data['Spouse_First_Name'] || 'Spouse 2'), data['Living_Will_Spouse2'] ? `Option ${data['Living_Will_Spouse2']}` : null],
-    ['Submitted', new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })],
-  ];
+
+  const isSingle = getTrustType() === 'single';
+
+  let fields;
+  if (isSingle) {
+    // Single trust summary fields
+    fields = [
+      ['Trust Name', data['Name_of_Trust']],
+      ['Trustor', `${data['Your_First_Name'] || ''} ${data['Your_Last_Name'] || ''}`.trim()],
+      ['Children', data['Full_Legal_Names_of_Children']],
+      ['First Choice Successor Trustee', data['First_Choice_Successor_Trustee']],
+      ['Second Choice Successor Trustee', data['Second_Choice_Successor_Trustee']],
+      ['Guardian', data['Guardian_Option'] === 'B' ? data['Guardian_Name'] : 'Same as Successor Trustee'],
+      ['Financial POA Agent', data['DPOA_Agent_Name']],
+      ['Primary Healthcare Agent', data['Agent_Name']],
+      ['Backup Healthcare Agent', data['Alternate_Agent_Name']],
+      ['Living Will', data['Living_Will'] ? `Option ${data['Living_Will']}` : null],
+      ['Submitted', new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })],
+    ];
+  } else {
+    // Joint trust summary fields
+    const spouseName = data['Spouse_First_Name'] ? `${data['Spouse_First_Name']} ${data['Your_Last_Name'] || ''}`.trim() : null;
+    fields = [
+      ['Trust Name', data['Name_of_Trust']],
+      ['Trustor 1', `${data['Your_First_Name'] || ''} ${data['Your_Last_Name'] || ''}`.trim()],
+      ['Trustor 2', spouseName],
+      ['Children', data['Full_Legal_Names_of_Children']],
+      ['First Choice Successor Trustee', data['First_Choice_Successor_Trustee']],
+      ['Second Choice Successor Trustee', data['Second_Choice_Successor_Trustee']],
+      ['Guardian Arrangement', data['Guardian_Option'] === 'B' ? `Option B — ${data['First_Choice_Guardian'] || ''}` : 'Option A — same as successor trustees'],
+      ['Financial Agent', data['Financial_Agent_Primary']],
+      ['Backup Financial Agent', data['Financial_Agent_Backup']],
+      [`${data['Your_First_Name'] || 'Spouse 1'} Healthcare Agent`, spouseName ? `${spouseName} (spouse)` : null],
+      [`${data['Your_First_Name'] || 'Spouse 1'} Backup Healthcare Agent`, data['Alternate_Agent_Name']],
+      [`${data['Spouse_First_Name'] || 'Spouse 2'} Healthcare Agent`, `${data['Your_First_Name'] || ''} ${data['Your_Last_Name'] || ''}`.trim() + ' (spouse)'],
+      [`${data['Spouse_First_Name'] || 'Spouse 2'} Backup Healthcare Agent`, data['Spouse2_Alternate_Agent_Name']],
+      ['Living Will — ' + (data['Your_First_Name'] || 'Spouse 1'), data['Living_Will_Spouse1'] ? `Option ${data['Living_Will_Spouse1']}` : null],
+      ['Living Will — ' + (data['Spouse_First_Name'] || 'Spouse 2'), data['Living_Will_Spouse2'] ? `Option ${data['Living_Will_Spouse2']}` : null],
+      ['Submitted', new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })],
+    ];
+  }
 
   fields.forEach(([label, val]) => {
     if (!val) return;
@@ -1444,18 +1452,29 @@ function showConfirmation(data) {
     rows.appendChild(row);
   });
 
-  // Build document checklist based on package
+  // Document checklist
   const docsList = document.getElementById('docsList');
   docsList.innerHTML = '';
-  const docs = [
-    { name: data['Name_of_Trust'] || 'Family Revocable Living Trust', sub: 'Including Certification of Trust and Asset Transfer Instructions' },
-    { name: `Last Will & Testament — ${data['Your_First_Name'] || 'Spouse 1'} ${data['Your_Last_Name'] || ''}`.trim(), sub: 'Pour-over will' },
-    { name: `Last Will & Testament — ${data['Spouse_First_Name'] || 'Spouse 2'} ${data['Your_Last_Name'] || ''}`.trim(), sub: 'Pour-over will' },
-    { name: `Durable Power of Attorney — ${data['Your_First_Name'] || 'Spouse 1'} ${data['Your_Last_Name'] || ''}`.trim(), sub: 'Financial and legal authority' },
-    { name: `Durable Power of Attorney — ${data['Spouse_First_Name'] || 'Spouse 2'} ${data['Your_Last_Name'] || ''}`.trim(), sub: 'Financial and legal authority' },
-    { name: `Health Care Directive — ${data['Your_First_Name'] || 'Spouse 1'} ${data['Your_Last_Name'] || ''}`.trim(), sub: 'Healthcare POA and Living Will' },
-    { name: `Health Care Directive — ${data['Spouse_First_Name'] || 'Spouse 2'} ${data['Your_Last_Name'] || ''}`.trim(), sub: 'Healthcare POA and Living Will' },
-  ];
+  let docs;
+  if (isSingle) {
+    docs = [
+      { name: data['Name_of_Trust'] || 'Revocable Living Trust', sub: 'Including Certification of Trust and Asset Transfer Instructions' },
+      { name: `Last Will & Testament — ${data['Your_First_Name'] || ''} ${data['Your_Last_Name'] || ''}`.trim(), sub: 'Pour-over will' },
+      { name: `Durable Power of Attorney — ${data['Your_First_Name'] || ''} ${data['Your_Last_Name'] || ''}`.trim(), sub: 'Financial and legal authority' },
+      { name: `Health Care Directive — ${data['Your_First_Name'] || ''} ${data['Your_Last_Name'] || ''}`.trim(), sub: 'Healthcare POA and Living Will' },
+    ];
+  } else {
+    const spouseName = data['Spouse_First_Name'] ? `${data['Spouse_First_Name']} ${data['Your_Last_Name'] || ''}`.trim() : 'Spouse 2';
+    docs = [
+      { name: data['Name_of_Trust'] || 'Family Revocable Living Trust', sub: 'Including Certification of Trust and Asset Transfer Instructions' },
+      { name: `Last Will & Testament — ${data['Your_First_Name'] || ''} ${data['Your_Last_Name'] || ''}`.trim(), sub: 'Pour-over will' },
+      { name: `Last Will & Testament — ${spouseName}`, sub: 'Pour-over will' },
+      { name: `Durable Power of Attorney — ${data['Your_First_Name'] || ''} ${data['Your_Last_Name'] || ''}`.trim(), sub: 'Financial and legal authority' },
+      { name: `Durable Power of Attorney — ${spouseName}`, sub: 'Financial and legal authority' },
+      { name: `Health Care Directive — ${data['Your_First_Name'] || ''} ${data['Your_Last_Name'] || ''}`.trim(), sub: 'Healthcare POA and Living Will' },
+      { name: `Health Care Directive — ${spouseName}`, sub: 'Healthcare POA and Living Will' },
+    ];
+  }
 
   docs.forEach(d => {
     const item = document.createElement('div');
@@ -1476,44 +1495,38 @@ function showConfirmation(data) {
 }
 
 // ─── Consent screen ───────────────────────────────────────────────────────────
-const consentCheckbox  = document.getElementById('consentCheckbox');
-const consentBtn       = document.getElementById('consentBtn');
-const consentScreen    = document.getElementById('consentScreen');
+const consentCheckbox    = document.getElementById('consentCheckbox');
+const consentBtn         = document.getElementById('consentBtn');
+const consentScreen      = document.getElementById('consentScreen');
 const consentDateDisplay = document.getElementById('consentDateDisplay');
 
-// Show today's date on consent screen
 consentDateDisplay.textContent = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
-// Enable button only when checkbox checked
 consentCheckbox.addEventListener('change', () => {
   consentBtn.disabled = !consentCheckbox.checked;
 });
 
-// On agree — record timestamp, hide consent, show chat
 consentBtn.addEventListener('click', () => {
   if (!consentCheckbox.checked) return;
-
-  // Record consent timestamp (could be sent to server for logging)
   const consentTime = new Date().toISOString();
   console.log('Consent given at:', consentTime);
 
-  // Hide consent screen, show chat
   consentScreen.classList.add('hidden');
   document.getElementById('progressWrap').classList.remove('hidden');
   document.getElementById('chatCard').classList.remove('hidden');
-  // Initialize textarea height now that it's visible
   setTimeout(() => resizeChatInput(), 50);
 
-  // Start the chatbot with client info and selected package
-  init(clientInfo, selectedPackage);
+  // Use /start-single for single trust, /start for everything else
+  const startEndpoint = getTrustType() === 'single' ? '/start-single' : '/start';
+  init(clientInfo, selectedPackage, startEndpoint);
 });
 
-// ─── Init: load first message from backend ────────────────────────────────────
-async function init(clientInfo, selectedPackage) {
+// ─── Init ─────────────────────────────────────────────────────────────────────
+async function init(clientInfo, selectedPackage, startEndpoint) {
   setWaiting(true);
   showTyping();
   try {
-    const res = await fetch(`${BACKEND_URL}/start`, {
+    const res = await fetch(`${BACKEND_URL}${startEndpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ clientInfo, selectedPackage })
@@ -1522,17 +1535,14 @@ async function init(clientInfo, selectedPackage) {
     const data = await res.json();
     hideTyping();
 
-    // Show first bubble
     appendBotMessage(data.bubble1 || data.reply);
 
-    // Show typing indicator, then second bubble after a short delay
     if (data.bubble2) {
       setTimeout(() => {
         showTyping();
         setTimeout(() => {
           hideTyping();
           appendBotMessage(data.bubble2);
-          // Store combined text in conversation history for AI context
           conversationHistory.push({ role: 'assistant', content: data.combinedForHistory || data.bubble1 + '\n\n' + data.bubble2 });
           setWaiting(false);
         }, 1200);
@@ -1556,13 +1566,11 @@ async function init(clientInfo, selectedPackage) {
 // ─── Go back one message ──────────────────────────────────────────────────────
 function goBackOneMessage() {
   if (conversationHistory.length < 2 || isWaiting) return;
-  // Remove last assistant message and last user message
   const lastMsg = conversationHistory[conversationHistory.length - 1];
   if (lastMsg.role === 'assistant') conversationHistory.pop();
   if (conversationHistory.length > 0 && conversationHistory[conversationHistory.length - 1].role === 'user') {
     conversationHistory.pop();
   }
-  // Remove last two visible message bubbles from chat UI
   const messages = chatMessages.querySelectorAll('.msg, .typing-wrap');
   const arr = Array.from(messages);
   if (arr.length >= 2) { arr[arr.length - 1].remove(); arr[arr.length - 2].remove(); }
@@ -1581,8 +1589,6 @@ chatInput.addEventListener('input', resizeChatInput);
 // ─── Event listeners ──────────────────────────────────────────────────────────
 sendBtn.addEventListener('click', sendMessage);
 chatInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
-
-// Consent screen handles init trigger — do not auto-start
 </script>
 </body>
 </html>
