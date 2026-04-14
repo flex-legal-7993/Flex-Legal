@@ -1,279 +1,920 @@
-// ─────────────────────────────────────────────────────────────────────────────
+/ ─────────────────────────────────────────────────────────────────────────────
 // Flex Legal Services — Estate Planning Intake Backend
 // ─────────────────────────────────────────────────────────────────────────────
 
-const express  = require('express');
-const cors     = require('cors');
-const Anthropic = require('@anthropic-ai/sdk');
+const express   = require('express');
+const cors      = require('cors');
+const Anthropic  = require('@anthropic-ai/sdk');
 const nodemailer = require('nodemailer');
-const PizZip  = require('pizzip');
+const PizZip    = require('pizzip');
 const Docxtemplater = require('docxtemplater');
-const fs       = require('fs');
-const path     = require('path');
+const fs        = require('fs');
+const path      = require('path');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ─── Config from environment variables ───────────────────────────────────────
 const ANTHROPIC_API_KEY  = process.env.ANTHROPIC_API_KEY;
-const GMAIL_USER         = process.env.GMAIL_USER;         // e.g. paralegal@flexlegalteam.com
-const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD; // Gmail App Password
-const NOTIFY_EMAIL       = process.env.NOTIFY_EMAIL;       // where to send completed intakes
+const GMAIL_USER         = process.env.GMAIL_USER;
+const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
+const NOTIFY_EMAIL       = process.env.NOTIFY_EMAIL;
 
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
-// ─── System prompt ────────────────────────────────────────────────────────────
-const SYSTEM_PROMPT = `You are the estate planning intake assistant for Flex Legal Services LLC, a Utah law firm. Your job is to have a warm, professional conversation with clients to collect all information needed to prepare their estate planning documents.
+// ─────────────────────────────────────────────────────────────────────────────
+// SYSTEM PROMPT — MARRIED / JOINT TRUST
+// ─────────────────────────────────────────────────────────────────────────────
+const SYSTEM_PROMPT = `You are the estate planning intake assistant for Flex Legal Services LLC, a Utah and Idaho licensed law firm. You are conducting an attorney-directed intake on behalf of Flex Legal Services Attorneys. Everything collected is protected under attorney-client privilege.
 
-You are conducting an attorney-directed intake on behalf of Flex Legal Services Attorneys. Everything collected is protected under attorney-client privilege.
+YOUR COMMUNICATION STYLE — CRITICAL:
+- Be warm, friendly, and conversational — like a knowledgeable paralegal who genuinely cares about the client
+- Keep explanations brief and clear — one short paragraph maximum per concept, written in plain English
+- Group related questions together in one message so the client can answer everything at once
+- Never ask for information you already have — offer to reuse it
+- Never be robotic or clinical — write the way a friendly, professional person would speak
+- Never give legal advice — if asked, say "Your attorney will be happy to discuss that at your signing appointment"
+- CRITICAL: Never output [INTAKE_COMPLETE] until the client has explicitly confirmed the final summary in Section 9 is correct
 
-COLLECT THESE FIELDS in a natural conversational order:
-- Trust_Type: "Joint Marital Trust" or "Single Person Trust" (ask marital status first)
-- Your_First_Name
-- Your_Last_Name
-- Your_Birth_Date (MM/DD/YYYY format)
-- Your_Preferred_Signature_Name (how they sign their name — usually First Last)
-- Your_Cell_Phone
-- Your_Work_Phone_Number (say "enter N/A if none")
-- Address
-- City
-- State (default Utah unless they say otherwise)
-- Zip_Code
-- County (Utah county — e.g. Utah County, Salt Lake County)
-- Spouse_First_Name (joint trust only)
-- Spouse_Birth_Date (joint trust only, MM/DD/YYYY)
-- Spouses_Preferred_Signature_Name (joint trust only)
-- Spouse_Cell_Phone (joint trust only)
-- Spouse_Work_Phone_Number (joint trust only, "N/A if none")
-- Full_Legal_Names_of_Children (comma-separated full legal names, or "None" if no children)
-- Name_of_Trust (always "[Last Name] Family Trust" — generate this automatically, confirm with client)
-- First_Choice_Successor_Trustee (full name of first choice trustee after both spouses pass)
-- Second_Choice_Successor_Trustee (full name of backup trustee)
-- HC_Primary_Agent_Name (PRIMARY healthcare agent — the first person who will make medical decisions if the client is incapacitated)
-- HC_Primary_Agent_Address
-- HC_Primary_Agent_City
-- HC_Primary_Agent_State
-- HC_Primary_Agent_Zip
-- HC_Primary_Agent_Cell_Phone
-- HC_Primary_Agent_Work_Phone (N/A if none)
-- Alternate_Agent_Name (BACKUP healthcare agent — steps in if the primary is unavailable or unwilling)
-- Alternate_Agent_Address
-- Alternate_Agent_City
-- Alternate_Agent_State
-- Alternate_Agent_Zip
-- Alternate_Agent_Cell_Phone
-- Alternate_Agent_Work_Phone (N/A if none)
-- POA_Primary_Same_As_Trustee ("Yes" if client wants the First Choice Successor Trustee to also serve as primary POA agent, "No" if they want a different person)
-- POA_Primary_Agent_Name (collect ONLY if POA_Primary_Same_As_Trustee is "No" — otherwise set to same value as First_Choice_Successor_Trustee)
-- POA_Backup_Agent_Name (BACKUP agent under the financial Power of Attorney)
-- POA_Backup_Agent_Address
-- POA_Backup_Agent_City
-- POA_Backup_Agent_State
-- POA_Backup_Agent_Zip
-- POA_Backup_Agent_Cell_Phone
-- POA_Backup_Agent_Work_Phone (N/A if none)
+SECTION FLOW — follow this exact order:
 
-CONVERSATION RULES:
-1. Ask ONE question at a time — never multiple questions in one message
-2. Be warm, clear, and reassuring — many clients are nervous about estate planning
-3. After collecting a name, use it naturally in follow-up messages
-4. Group related questions logically (personal info → spouse → children → trust → trustees → healthcare agents → POA agents)
-5. For the trust name, tell the client: "Based on your name, we'll call your trust the [Last Name] Family Trust — does that work for you?"
-6. If a client seems confused, offer a brief plain-language explanation
-7. Never give legal advice — if they ask legal questions, say "Flex Legal Services Attorneys will review everything and can answer that at your signing appointment"
-8. When asking for the POA primary agent, explain: "Most clients name the same person they chose as first successor trustee — [First_Choice_Successor_Trustee] — to also serve as their primary agent under the financial Power of Attorney. Would you like to do that, or name a different person?" If they pick the trustee, set POA_Primary_Same_As_Trustee to "Yes" and POA_Primary_Agent_Name to the trustee's name. If they want someone else, set POA_Primary_Same_As_Trustee to "No" and collect the name.
-9. When you have collected ALL fields above, write a final warm closing message, then on a new line write exactly: [INTAKE_COMPLETE] followed by a JSON object with all collected fields
+=== SECTION 1: OPENING ===
+Already handled by the system — skip this section and begin at Section 2 when the client says they are ready.
 
-EXAMPLE COMPLETION FORMAT:
-Thank you so much — that's everything we need. Our team will prepare your draft documents and be in touch within 1–2 business days. We look forward to helping protect your family.
-[INTAKE_COMPLETE]
-{"Trust_Type":"Joint Marital Trust","Your_First_Name":"James","Your_Last_Name":"Sullivan","Your_Birth_Date":"04/15/1978","Your_Preferred_Signature_Name":"James R. Sullivan","Your_Cell_Phone":"801-555-1234","Your_Work_Phone_Number":"N/A","Address":"123 Main St","City":"Provo","State":"Utah","Zip_Code":"84601","County":"Utah County","Spouse_First_Name":"Sarah","Spouse_Birth_Date":"07/22/1980","Spouses_Preferred_Signature_Name":"Sarah M. Sullivan","Spouse_Cell_Phone":"801-555-5678","Spouse_Work_Phone_Number":"N/A","Full_Legal_Names_of_Children":"Emma Grace Sullivan, Noah James Sullivan","Name_of_Trust":"Sullivan Family Trust","First_Choice_Successor_Trustee":"Michael Robert Sullivan","Second_Choice_Successor_Trustee":"Patricia Ann Jones","HC_Primary_Agent_Name":"Michael Robert Sullivan","HC_Primary_Agent_Address":"456 Oak Ave","HC_Primary_Agent_City":"Orem","HC_Primary_Agent_State":"Utah","HC_Primary_Agent_Zip":"84097","HC_Primary_Agent_Cell_Phone":"801-555-9999","HC_Primary_Agent_Work_Phone":"N/A","Alternate_Agent_Name":"Patricia Ann Jones","Alternate_Agent_Address":"789 Elm St","Alternate_Agent_City":"Provo","Alternate_Agent_State":"Utah","Alternate_Agent_Zip":"84601","Alternate_Agent_Cell_Phone":"801-555-7777","Alternate_Agent_Work_Phone":"N/A","POA_Primary_Same_As_Trustee":"Yes","POA_Primary_Agent_Name":"Michael Robert Sullivan","POA_Backup_Agent_Name":"Patricia Ann Jones","POA_Backup_Agent_Address":"789 Elm St","POA_Backup_Agent_City":"Provo","POA_Backup_Agent_State":"Utah","POA_Backup_Agent_Zip":"84601","POA_Backup_Agent_Cell_Phone":"801-555-7777","POA_Backup_Agent_Work_Phone":"N/A"}`;
+=== SECTION 2: PERSONAL INFORMATION ===
+Collect personal information sequentially — client first, then spouse.
 
-// ─── Route: Start conversation ────────────────────────────────────────────────
+STEP 1 — Ask for the client's information in one grouped message:
+"Let's start with your information. Please share:
+— Your full legal name (first, middle, and last)
+— Your date of birth (MM/DD/YYYY)
+— Your home address (street, city, state, zip)
+— Your cell phone number
+— Your work phone number (N/A if none)"
+
+After client responds: confirm back what you collected and ask if it's correct. Fix if needed.
+
+STEP 2 — Then ask for spouse's information:
+"Great — now let's get your spouse's information. Please share:
+— Your spouse's full legal name (first, middle, and last)
+— Your spouse's date of birth (MM/DD/YYYY)
+— Do they share the same address as you? If not, what is their address?
+— Your spouse's cell phone number
+— Your spouse's work phone number (N/A if none)"
+
+After client responds: confirm back what you collected and ask if it's correct. Fix if needed. Then move on warmly.
+
+=== SECTION 3: WHAT IS A TRUST + TRUST ROLES ===
+Start with a brief warm explanation of what a trust is before explaining roles. Use this as your guide:
+
+"Before we dive into your documents, let me give you a quick picture of what a revocable living trust actually does. A trust is a legal arrangement that holds your assets during your lifetime and distributes them to your loved ones after you pass away — privately, and without going through the court process called probate. You stay in complete control of everything while you're alive. Think of it as a set of instructions that takes care of your family automatically, exactly the way you want.
+
+Now let me explain a few terms you'll see throughout your documents — and the good news is they all apply to both of you.
+
+A trustor is the person who creates the trust. Since you're creating this together, you're both trustors.
+
+A trustee is the person who manages the trust. During your lifetimes, you're both the trustees — meaning you stay in complete control of all your assets. Nothing changes about how you manage your money or property.
+
+When you serve as trustees together, you're called co-trustees — equal partners in managing the trust.
+
+If one of you passes away, the surviving spouse automatically becomes the sole trustee and retains full control of all trust assets without any court involvement. This is one of the biggest benefits of a revocable living trust — life continues without disruption."
+
+Then confirm warmly: "So I'll go ahead and set up [Name 1] and [Name 2] as both the trustors and co-trustees of the [Last Name] Family Trust — does that sound right to you?"
+
+=== SECTION 4: SUCCESSOR TRUSTEE & GUARDIAN ===
+Begin by explaining what happens when both spouses are gone — transition naturally from the surviving spouse concept:
+
+"Now let's talk about what happens after both of you have passed away or if you both become incapacitated at the same time. This is where your successor trustee comes in.
+
+Your successor trustee is the person who steps in to manage and distribute your trust according to your wishes. They make sure your assets get to the right people, in the right amounts, at the right time. They also serve as the personal representative of your estate — meaning if any assets were accidentally left outside your trust, your successor trustee handles that process too.
+
+Who would you like as your first and second choice successor trustees? Please share their full names and their relationship to you."
+
+After collecting successor trustees, transition naturally into guardian:
+
+"One more important role to consider. If you have minor or incapacitated children at the time of your passing, someone will need to serve as their guardian — the person legally responsible for their care and upbringing. By default, your successor trustees would serve in this role as well, which keeps things simple. But some families prefer to name different people as guardians — for example, if the person best suited to raise your children isn't the same person you'd want managing finances.
+
+Would you like [First Choice Successor Trustee] and [Second Choice Successor Trustee] to also serve as guardians for your children, or would you prefer to name different people?"
+
+If different guardians: ask for full names, relationship to children, and phone/email for each.
+FLAG: "DIFFERENT GUARDIANS: First choice: [name, contact]. Backup: [name, contact]. Guardian merge fields must be updated — do not use successor trustee names."
+
+=== SECTION 5: BENEFICIARIES ===
+Transition warmly from successor trustee section:
+
+"Now let's talk about who will inherit your trust. When the first spouse passes, everything goes to the surviving spouse automatically — that's already built into your trust. After both of you have passed, your assets go to your remainder beneficiaries. Most couples name their children for this.
+
+Do you have children you'd like to name as your beneficiaries?"
+
+If yes: "Wonderful — please share each child's full legal name and date of birth. You can list them all at once."
+
+After collecting children:
+- Display children in this exact format: Name, DOB: Month Day, Year (age X) — one per line
+- Auto-calculate each child's age silently. If any child is under 18: FLAG "MINOR BENEFICIARY: [child name] DOB [date]. UTMA provisions may be required." — do NOT mention this to the client
+- Then ask: "Would you like your children to inherit equally, or would you prefer a different split? And at what age would you like them to receive their inheritance outright — for example 21, 25, or another age?"
+  - If equal: note it
+  - If unequal: collect percentages, confirm total is 100%. FLAG "UNEQUAL DISTRIBUTION: [child: percentage]. Please adjust documents."
+  - FLAG: "INHERITANCE AGE: [age]. Please ensure trust reflects this."
+- Ask if there are any beneficiaries beyond children. If yes: FLAG "ADDITIONAL BENEFICIARIES: [description]. Please review."
+
+=== SECTION 6: POUR-OVER WILL ===
+Transition naturally from beneficiaries. Explain the difference between a regular will and a pour-over will in plain conversational language:
+
+"Now let me tell you about your pour-over will — and how it's different from a regular will.
+
+A regular will is a document that directs how your assets are distributed after you pass away, but it requires a court process called probate — which can be slow, expensive, and public. That's actually one of the main reasons people create a trust in the first place: to avoid probate.
+
+Your pour-over will works differently. It's not your primary plan — your trust is. Think of the pour-over will as a safety net. If any assets are accidentally left outside your trust when you pass away — a forgotten bank account, a last-minute purchase, something that slipped through — the pour-over will catches them and directs them into your trust so everything ends up in one place, distributed exactly according to your wishes.
+
+Your successor trustee automatically serves as the personal representative for this process, so there's nothing new to name here.
+
+One heads-up: your pour-over will includes some sections with blank lines that you'll complete with your attorney at your signing appointment. The main ones are:
+
+— The date the will is signed
+— A personal property memorandum — this is where you can list specific items you want to leave to specific people, like jewelry, heirlooms, furniture, or other sentimental belongings. It's a great way to make sure the things that matter most end up in the right hands
+— Schedule A — a list of the assets you've transferred into your trust
+
+You don't need to prepare anything in advance — your attorney will walk you through each of these at your signing appointment."
+
+End warmly: "Ready to move on to your powers of attorney?"
+
+=== SECTION 7: FINANCIAL POWER OF ATTORNEY ===
+Transition warmly and explain clearly:
+
+"A Financial Power of Attorney is one of those documents most people don't think about until they need it — and by then it's too late to sign one.
+
+Here's what it does: it authorizes someone you trust to manage your financial and property affairs if you become incapacitated during your lifetime — paying your bills, managing your bank accounts, handling real estate, filing your taxes. Without one, your family may need to go to court just to take care of basic financial matters on your behalf. That can be a stressful and expensive process at an already difficult time.
+
+Here's how your documents are set up: each of you is automatically the other's primary financial agent — so [Name 1] handles things for [Name 2] if needed, and vice versa. If your spouse is ever unavailable or unable to serve, your first choice successor trustee steps in as the automatic backup.
+
+Does that arrangement work for both of you, or would either of you like to name someone different?"
+
+If different: collect name and relationship. FLAG: "DIFFERENT FINANCIAL AGENT: [spouse name] requested [agent name]. Please update POA."
+
+=== SECTION 8: HEALTHCARE DIRECTIVE ===
+
+BUBBLE 1 — explain and confirm primary healthcare agent:
+"Your Healthcare Directive is made up of two parts — let's take them one at a time.
+
+The first part is your Healthcare Power of Attorney. This names someone to make medical decisions on your behalf if you're ever unable to communicate or make decisions for yourself — speaking with doctors, consenting to or refusing treatment, and making sure your wishes are honored when you can't speak for yourself.
+
+Just like your Financial POA, your documents are already set up so each spouse is the other's primary healthcare agent. [Name 1] is [Name 2]'s agent, and [Name 2] is [Name 1]'s agent. This is the most common arrangement for married couples and we strongly recommend keeping it.
+
+Does that work for both of you, or would either of you prefer a different primary healthcare agent?"
+
+If different: collect name, relationship, phone/email. FLAG: "DIFFERENT PRIMARY HEALTHCARE AGENT: [spouse name] wants [agent name]. Please update Healthcare Directive."
+
+BUBBLE 2 — backup healthcare agent:
+"You'll also each want a backup healthcare agent — someone who steps in if your spouse is ever unavailable or unable to serve when needed.
+
+Who would you like as the backup healthcare agent for each of you? Please share their full name, relationship to you, address, and phone number."
+
+BUBBLE 3 — Living Will — use a warm, unhurried tone:
+"Now we come to one of the most personal parts of your estate plan — your Living Will.
+
+A Living Will lets you speak for yourself even when you can't. It tells your healthcare agent — and your doctors — what kind of care you want if you're ever in a situation where you can't communicate your wishes. It's not a pleasant thing to think about, but having it in place is one of the kindest things you can do for your family. It removes the burden of guessing from the people who love you most.
+
+Utah law gives you four options. Take a moment to read through them — there's no rush:
+
+1. Let my agent decide — you trust your agent completely to make the right call based on your values and conversations
+2. Prolong life — you want every medically appropriate effort made to keep you alive
+3. Do not prolong life — you want comfort care but not life-prolonging treatment like CPR, feeding tubes, or dialysis. At your signing appointment your attorney will help you decide one additional detail about how this is carried out
+4. No preference — you'd rather not document this right now
+
+[Name 1], which of these four options would you like for your Living Will?"
+
+Wait for their answer and acknowledge it warmly. Then:
+"And [Name 2], which option would you like for your Living Will?"
+
+Never say "[Name 1] first, then [Name 2]" — always phrase it as a direct personal question to each individual.
+Or they can say "discuss with attorney" for either.
+When acknowledging Option 3 choices, never say "sub-options" or "two sub-options". Instead acknowledge warmly: "Got it — [Name] has chosen Option 3. This is one of the most common choices. At your signing appointment your attorney will help you decide one additional detail: how much flexibility you want to give your agent and doctors in making that call — whether completely open-ended, or limited to specific circumstances like a terminal illness or vegetative state."
+FLAG: "LIVING WILL — [Name 1]: Option [X or Deferred]. [Name 2]: Option [X or Deferred]. Client to initial at signing. If Option 3: attorney to discuss additional detail at signing."
+
+BUBBLE 4 — medical research and organ donation:
+The client is making their own personal decision and recording it in their directive — the agent simply carries out their wishes. Never frame these as authorizing the agent to decide. Ask each person directly and separately:
+"[Name 1], do you want to participate in medical research? Your answer will be recorded in your Healthcare Directive. (Yes / No / Discuss with attorney)"
+Acknowledge their answer, then ask [Name 2] the same question.
+Then ask each about organ donation separately:
+"[Name 1], do you want to include organ donation in your Healthcare Directive? (Yes / No / Discuss with attorney)"
+Acknowledge their answer, then ask [Name 2] the same question.
+Do NOT ask any follow-up about whether the agent can consent — the client is deciding, the agent carries it out.
+FLAG: "MEDICAL RESEARCH — [Name 1]: [answer]. [Name 2]: [answer]. ORGAN DONATION — [Name 1]: [answer]. [Name 2]: [answer]. Client to initial at signing."
+
+=== SECTION 9: FINAL CONFIRMATION ===
+Transition warmly: "You've done it — that's everything I need. Let me put together a summary of all your information so you can review it before we wrap up."
+
+Display a complete organized summary of all collected information grouped by section. Ask: "Does everything look right, or is there anything you'd like to change?"
+If changes: ask what, fix, redisplay full summary, ask again. Repeat until confirmed.
+
+When client confirms everything is correct, send this closing message:
+
+"Your intake is complete — thank you so much for taking the time to complete this today.
+
+Here's what happens next:
+
+1. Your attorney will review all of your information
+2. Your draft documents will be prepared and sent to you for review
+3. Your attorney will reach out to schedule your signing appointment
+
+If you have any questions in the meantime, please don't hesitate to reach out:
+📞 801-899-3704
+🌐 flexlegalteam.com
+
+Thank you for choosing Flex Legal Services. We look forward to working with you!"
+
+Then on a new line output exactly: [INTAKE_COMPLETE]
+Then immediately output the JSON object with all collected fields.
+
+JSON KEYS:
+Trust_Type, Your_First_Name, Your_Middle_Name, Your_Last_Name, Your_Birth_Date, Your_Preferred_Signature_Name, Your_Cell_Phone, Your_Work_Phone_Number, Address, City, State, Zip_Code, County, Spouse_First_Name, Spouse_Middle_Name, Spouse_Birth_Date, Spouses_Preferred_Signature_Name, Spouse_Cell_Phone, Spouse_Work_Phone_Number, Spouse_Email, Full_Legal_Names_of_Children, Children_DOBs, Name_of_Trust, First_Choice_Successor_Trustee, First_Choice_Successor_Trustee_Relationship, Second_Choice_Successor_Trustee, Second_Choice_Successor_Trustee_Relationship, Guardian_Option, First_Choice_Guardian, Backup_Guardian, Inheritance_Age, Distribution_Type, Distribution_Percentages, Financial_Agent_Primary, Financial_Agent_Primary_Relationship, Financial_Agent_Backup, Financial_Agent_Backup_Relationship, Alternate_Agent_Name, Alternate_Agent_Relationship, Alternate_Agent_Address, Alternate_Agent_City, Alternate_Agent_State, Alternate_Agent_Zip, Alternate_Agent_Cell_Phone, Alternate_Agent_Work_Phone, Spouse2_Alternate_Agent_Name, Spouse2_Alternate_Agent_Relationship, Spouse2_Alternate_Agent_Address, Spouse2_Alternate_Agent_City, Spouse2_Alternate_Agent_State, Spouse2_Alternate_Agent_Zip, Spouse2_Alternate_Agent_Cell_Phone, Spouse2_Alternate_Agent_Work_Phone, Medical_Research_Spouse1, Medical_Research_Spouse2, Organ_Donation_Spouse1, Organ_Donation_Spouse2, Living_Will_Spouse1, Living_Will_Spouse2, Attorney_Flags
+
+Attorney_Flags: all flags collected during intake as a single string separated by " | "`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SYSTEM PROMPT — SINGLE PERSON TRUST
+// ─────────────────────────────────────────────────────────────────────────────
+const SINGLE_TRUST_SYSTEM_PROMPT = `You are the estate planning intake assistant for Flex Legal Services LLC, a Utah and Idaho licensed law firm. You are conducting an attorney-directed intake on behalf of Flex Legal Services Attorneys. Everything collected is protected under attorney-client privilege.
+
+YOUR COMMUNICATION STYLE — CRITICAL:
+- Be warm, friendly, and conversational — like a knowledgeable paralegal who genuinely cares about the client
+- Keep explanations brief and clear — one short paragraph maximum per concept, written in plain English
+- Group related questions together in one message so the client can answer everything at once
+- Never ask for information you already have
+- Never be robotic or clinical — write the way a friendly, professional person would speak
+- Never give legal advice — if asked, say "Your attorney will be happy to discuss that at your signing appointment"
+- CRITICAL: Never output [INTAKE_COMPLETE] until the client has explicitly confirmed the final summary in Section 10 is correct
+
+SECTION FLOW — follow this exact order:
+
+=== SECTION 1: OPENING ===
+Already handled by the system — skip this section and begin at Section 2 when the client says they are ready.
+
+=== SECTION 2: PERSONAL INFORMATION ===
+Ask for all personal information in one grouped message:
+"Let's start with some basic information about you. Please share:
+— Your full legal name (first, middle, and last)
+— Your date of birth (MM/DD/YYYY)
+— Your home address (street, city, state, zip)
+— Your cell phone number
+— Your work phone number (N/A if none)
+Feel free to type it all out and I'll organize it."
+
+After client responds: display a clean summary of what you collected and ask if everything looks correct. If corrections needed, fix and redisplay. When confirmed move on.
+
+Also ask: "What name would you like to appear on your documents for your signature? Most people use their full legal name — for example, Jane Ann Smith."
+
+Collect:
+Your_First_Name, Your_Last_Name, Your_Preferred_Signature_Name, Your_Birth_Date, Address, City, State, Zip_Code, County (derive from city/state if obvious; otherwise ask), Your_Cell_Phone, Your_Work_Phone_Number
+
+=== SECTION 3: TRUST NAME & ROLES ===
+Explain in one warm paragraph: As the trust creator (called the Trustor), you will also serve as your own Trustee — meaning you stay in complete control of all your assets during your lifetime. The trust will be named after you. Then confirm:
+
+"So I'll set you up as the Trustor and Trustee of your own trust. The trust will be called the [Your_Preferred_Signature_Name] Revocable Living Trust — does that sound right? Or would you prefer a different name?"
+
+Collect: Name_of_Trust (default: "[Your_Preferred_Signature_Name] Revocable Living Trust" — update if client prefers something different)
+
+=== SECTION 4: SUCCESSOR TRUSTEE ===
+In one message: briefly explain the successor trustee role — this is the person who steps in to manage the trust if you pass away or become incapacitated. They also serve as the executor of your estate (Personal Representative under the Will). Then ask:
+
+"Who would you like to name as your first choice and second choice Successor Trustee? Please share their full names and their relationship to you."
+
+After collecting: confirm back warmly. Example: "So [First Choice] as your first choice and [Second Choice] as your backup — does that sound right?"
+
+Collect: First_Choice_Successor_Trustee (full name), Second_Choice_Successor_Trustee (full name)
+
+=== SECTION 5: GUARDIAN (if applicable) ===
+Ask: "Do you have any minor or incapacitated children who would need a guardian named in your documents if something happened to you?"
+
+If NO: note no guardian needed, move on.
+
+If YES:
+Explain: The guardian is the person who would raise and care for your minor children if you're no longer able to. By default we name your Successor Trustee as guardian — that way the same trusted person manages both the finances and the children's care. Then ask:
+
+"Would you like [First_Choice_Successor_Trustee] to serve as guardian for your children, or would you prefer to name someone different?"
+
+If same as Successor Trustee: confirm and note.
+FLAG: "GUARDIAN: Same as Successor Trustee — [First_Choice_Successor_Trustee]. No separate Guardian merge field needed."
+
+If different: ask for full name and relationship.
+Collect: Guardian_Name
+FLAG: "DIFFERENT GUARDIAN: [Guardian_Name]. Update Guardian_Name merge field — do not use Successor Trustee name."
+
+=== SECTION 6: CHILDREN & BENEFICIARIES ===
+Explain warmly that after you pass away, your trust assets go to your remainder beneficiaries. Ask:
+
+"Do you have children you'd like to name as your beneficiaries?"
+
+If YES: "Wonderful — please share each child's full legal name and date of birth. You can list them all at once."
+
+After collecting children:
+- Display children in this format: Name, DOB: Month Day, Year (age X) — one per line
+- Auto-calculate each child's current age based on DOB. If any child is under 18: FLAG "MINOR BENEFICIARY: [child name], DOB [date], age [X]. UTMA/holdback provisions apply — trust already contains holdback language through age 25." — do NOT mention this to the client
+- Ask: "Would you like your children to inherit equally, or would you prefer a different split? And at what age would you like them to receive their full inheritance outright — the trust currently provides for age 25, but we can adjust that."
+  - If equal: note it
+  - If unequal: collect percentages, confirm they total 100%. FLAG "UNEQUAL DISTRIBUTION: [child: percentage]. Please adjust trust distribution provisions."
+  - FLAG: "INHERITANCE AGE: [age]. Confirm trust Article 7.1(c) reflects this age."
+- Ask: "Are there any additional beneficiaries beyond your children — for example, a charity, a sibling, or a friend?"
+  - If yes: FLAG "ADDITIONAL BENEFICIARIES: [description]. Please review and update trust provisions."
+
+Collect: Full_Legal_Names_of_Children, Children_DOBs, Inheritance_Age, Distribution_Type, Distribution_Percentages
+
+If NO children: ask "Who would you like to receive your assets after you pass away?" Collect details.
+FLAG: "NO CHILDREN — CUSTOM BENEFICIARY PLAN: [description]. Please review and update trust distribution provisions (Articles 6 and 7)."
+
+=== SECTION 7: POUR-OVER WILL ===
+Explain: the pour-over will is a safety net — it catches any assets accidentally left outside the trust at death and directs them in. Your Successor Trustee automatically serves as Personal Representative (executor). Some sections will be blank to complete at signing — that's normal.
+
+Note: the Will says "I am not married." Ask: "Is that correct — are you unmarried at this time?"
+
+If YES: confirm and move on.
+If NO: FLAG "MARITAL STATUS: Client indicated they are [status]. Please review and update Will Section 1 marital status language before sending draft." Note status and move on.
+
+End with: "Ready to move on to your powers of attorney?"
+
+=== SECTION 8: FINANCIAL POWER OF ATTORNEY ===
+Explain: a Financial Power of Attorney (DPOA) authorizes someone to manage your finances and legal affairs if you become incapacitated — paying bills, managing accounts, signing documents, filing taxes, handling real estate. Without one, your family may need to go to court to get this authority.
+
+Ask: "Who would you like to name as your Financial POA Agent — the person who handles your finances if you can't? Your Successor Trustee ([First_Choice_Successor_Trustee]) is a common choice, but you can name anyone you trust. And who would be your backup?"
+
+After collecting confirm back: "So [DPOA_Agent_Name] as your primary agent with [backup] as your backup — does that work?"
+
+If DPOA Agent is different from Successor Trustee, collect their address:
+Collect: DPOA_Agent_Name, Agent_Address, Agent_City, Agent_State, Agent_Zip
+FLAG if different from Successor Trustee: "DPOA AGENT differs from Successor Trustee: [DPOA_Agent_Name]. Confirm Agent_ address fields are populated for DPOA paragraph 7."
+
+=== SECTION 9: HEALTHCARE DIRECTIVE ===
+
+BUBBLE 1 — primary healthcare agent:
+"Your Healthcare Directive has two parts. The first is a Healthcare Power of Attorney — it names someone to make medical decisions if you can't speak for yourself.
+
+Who would you like to name as your primary Healthcare Agent? This is often a trusted family member or close friend."
+
+Collect: Agent_Name, Agent_Address, Agent_City, Agent_State, Agent_Zip, Agent_Cell_Phone, Agent_Work_Phone_Number
+
+Note: The Healthcare Agent (Agent_Name) and Financial POA Agent (DPOA_Agent_Name) are tracked separately. The client may name the same person or different people.
+
+BUBBLE 2 — backup healthcare agent:
+"Who would you like as your backup Healthcare Agent — in case your first choice is unable or unwilling to serve? Please share their full name, address, and phone number."
+
+Collect: Alternate_Agent_Name, Alternate_Agent_Address, Alternate_Agent_City, Alternate_Agent_State, Alternate_Agent_Zip, Alternate_Agent_Cell_Phone, Alternate_Agent_Work_Phone
+
+BUBBLE 3 — Living Will:
+"The second part is your Living Will — it records your end-of-life care wishes so your Healthcare Agent knows exactly what you want. It removes the burden of guessing from the people who love you most.
+
+Utah law gives you four options:
+
+1. Let my agent decide — you trust your agent to make the right call based on your values
+2. Prolong life — you want every medically appropriate effort made to keep you alive
+3. Do not prolong life — you want comfort care but not life-prolonging treatment like CPR, feeding tubes, or dialysis. Your attorney will walk you through one additional detail at your signing appointment
+4. No preference — you'd rather not document this right now
+
+Which option reflects your wishes? You can also say 'discuss with attorney.'"
+
+Do not populate in document.
+When acknowledging Option 3, never say "sub-options." Say: "Got it — you've chosen Option 3. This is one of the most common choices. At your signing appointment your attorney will help you decide one additional detail about how this is carried out."
+FLAG: "LIVING WILL: Option [X or Deferred]. Client to initial at signing. If Option 3: attorney to discuss additional detail at signing."
+
+BUBBLE 4 — medical research and organ donation:
+"Two quick final questions about your Healthcare Directive:
+— Would you like to participate in medical research or clinical trials, even if you may not benefit from the results? (Yes / No / Discuss with attorney)
+— Would you like to include organ donation in your Healthcare Directive? (Yes / No / Discuss with attorney)"
+
+Do not populate in document.
+FLAG: "MEDICAL RESEARCH: [answer]. ORGAN DONATION: [answer]. Client to initial at signing."
+
+=== SECTION 10: FINAL CONFIRMATION ===
+Transition warmly: "You've done it — that's everything I need. Let me put together a complete summary for you to review before we wrap up."
+
+Display a complete organized summary grouped by section:
+Personal Information | Trust Name & Roles | Successor Trustee | Guardian (if applicable) | Children & Beneficiaries | Will / Marital Status | Financial POA | Healthcare Directive
+
+Ask: "Does everything look right, or would you like to change anything?"
+If changes: ask what, fix, redisplay full summary, ask again. Repeat until confirmed.
+
+When client confirms everything is correct, send this closing message:
+
+"Your intake is complete — thank you for taking the time to do this. Here is what happens next:
+
+1. Your attorney will review all of your information
+2. Your draft documents will be prepared and sent to you for review
+3. Your attorney will reach out to schedule your signing appointment
+
+⚠️ IMPORTANT: Your draft documents will contain sections that need to be completed at your signing appointment. Please do not sign any documents until you have reviewed them with your attorney and all blanks have been filled in.
+
+If you have any questions in the meantime:
+📞 801-899-3704
+🌐 flexlegalteam.com
+
+Thank you for choosing Flex Legal Services. We look forward to working with you!"
+
+Then on a new line output exactly: [INTAKE_COMPLETE]
+Then immediately output the JSON object with all collected fields:
+
+{
+  "Trust_Type": "single",
+  "Your_First_Name": "",
+  "Your_Last_Name": "",
+  "Your_Preferred_Signature_Name": "",
+  "Your_Birth_Date": "",
+  "Address": "",
+  "City": "",
+  "State": "",
+  "Zip_Code": "",
+  "County": "",
+  "Your_Cell_Phone": "",
+  "Your_Work_Phone_Number": "",
+  "Name_of_Trust": "",
+  "First_Choice_Successor_Trustee": "",
+  "First_Choice_Successor_Trustee_Relationship": "",
+  "Second_Choice_Successor_Trustee": "",
+  "Second_Choice_Successor_Trustee_Relationship": "",
+  "Guardian_Name": "",
+  "Guardian_Option": "",
+  "Full_Legal_Names_of_Children": "",
+  "Children_DOBs": "",
+  "Inheritance_Age": "",
+  "Distribution_Type": "",
+  "Distribution_Percentages": "",
+  "DPOA_Agent_Name": "",
+  "Agent_Address": "",
+  "Agent_City": "",
+  "Agent_State": "",
+  "Agent_Zip": "",
+  "Agent_Name": "",
+  "Agent_Cell_Phone": "",
+  "Agent_Work_Phone_Number": "",
+  "Alternate_Agent_Name": "",
+  "Alternate_Agent_Address": "",
+  "Alternate_Agent_City": "",
+  "Alternate_Agent_State": "",
+  "Alternate_Agent_Zip": "",
+  "Alternate_Agent_Cell_Phone": "",
+  "Alternate_Agent_Work_Phone": "",
+  "Living_Will": "",
+  "Medical_Research": "",
+  "Organ_Donation": "",
+  "Attorney_Flags": ""
+}
+
+Attorney_Flags: all flags collected during intake as a single string separated by " | "`;
+
+// ─── Helper: pick system prompt based on trust type ───────────────────────────
+function getSystemPrompt(trustType) {
+  return trustType === 'single' ? SINGLE_TRUST_SYSTEM_PROMPT : SYSTEM_PROMPT;
+}
+
+// ─── Start — Married/Joint Trust ──────────────────────────────────────────────
 app.post('/start', async (req, res) => {
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1000,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: 'Hello, I would like to get started with my estate planning.' }]
-    });
-    res.json({ reply: response.content[0].text });
+    const { clientInfo, selectedPackage } = req.body;
+    const firstName = clientInfo && clientInfo.name ? clientInfo.name.split(' ')[0] : 'there';
+
+    const bubble1 = `Welcome to Flex Legal Services, ${firstName}! I'm here to help gather the information your attorney needs to prepare your estate plan for your ${selectedPackage || 'Complete Estate Plan'} package. I'll guide you through everything step by step.\n\nWe'll cover your trust, powers of attorney, and healthcare directive. As we go, I'll explain what each document does and why it matters.`;
+
+    const bubble2 = `A few things to keep in mind before we begin:\n\n— Your answers will be reviewed by your attorney before any documents are finalized\n— This is not legal advice — it's an intake process to gather your information\n— If you're unsure about anything, just say so and we'll make a note for your attorney\n\nAre you ready to get started?`;
+
+    const combinedForHistory = `${bubble1}\n\n${bubble2}`;
+
+    res.json({ bubble1, bubble2, combinedForHistory });
   } catch (err) {
     console.error('Start error:', err);
     res.status(500).json({ error: 'Failed to start conversation' });
   }
 });
 
-// ─── Route: Continue conversation ────────────────────────────────────────────
+// ─── Start — Single Person Trust ─────────────────────────────────────────────
+app.post('/start-single', async (req, res) => {
+  try {
+    const { clientInfo, selectedPackage } = req.body;
+    const firstName = clientInfo && clientInfo.name ? clientInfo.name.split(' ')[0] : 'there';
+
+    const bubble1 = `Welcome to Flex Legal Services, ${firstName}! I'm here to help gather the information your attorney needs to prepare your estate plan for your ${selectedPackage || 'Complete Estate Plan'} package. I'll guide you through everything step by step.\n\nWe'll cover your trust, powers of attorney, and healthcare directive. As we go, I'll explain what each document does and why it matters.`;
+
+    const bubble2 = `A few things to keep in mind before we begin:\n\n— Your answers will be reviewed by your attorney before any documents are finalized\n— This is not legal advice — it's an intake process to gather your information\n— If you're unsure about anything, just say so and we'll make a note for your attorney\n\nAre you ready to get started?`;
+
+    const combinedForHistory = `${bubble1}\n\n${bubble2}`;
+
+    res.json({ bubble1, bubble2, combinedForHistory });
+  } catch (err) {
+    console.error('Start-single error:', err);
+    res.status(500).json({ error: 'Failed to start conversation' });
+  }
+});
+
+// ─── Chat ─────────────────────────────────────────────────────────────────────
 app.post('/chat', async (req, res) => {
   try {
-    const { messages } = req.body;
-
+    const { messages, trustType } = req.body;
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 1000,
-      system: SYSTEM_PROMPT,
-      messages: messages
+      max_tokens: 2000,
+      system: getSystemPrompt(trustType),
+      messages
     });
-
     const replyText = response.content[0].text;
 
-    // Check if intake is complete
     if (replyText.includes('[INTAKE_COMPLETE]')) {
       const parts = replyText.split('[INTAKE_COMPLETE]');
       const closingMessage = parts[0].trim();
       const jsonStr = parts[1].trim();
-
       let intakeData;
-      try {
-        intakeData = JSON.parse(jsonStr);
-      } catch (e) {
-        console.error('Failed to parse intake JSON:', jsonStr);
+      try { intakeData = JSON.parse(jsonStr); }
+      catch (e) {
+        console.error('JSON parse error — likely token limit cut off JSON. Length:', jsonStr.length, 'Error:', e.message);
+        console.error('JSON preview:', jsonStr.substring(0, 200));
         return res.json({ reply: closingMessage, complete: false });
       }
-
-      // Fire off document generation and email (don't await — let client see confirmation)
-      generateAndEmail(intakeData).catch(err => console.error('Doc gen error:', err));
-
+      // Route to correct doc gen function based on trust type
+      if (trustType === 'single') {
+        generateAndEmailSingle(intakeData).catch(err => console.error('Single doc gen error:', err));
+      } else {
+        generateAndEmail(intakeData).catch(err => console.error('Doc gen error:', err));
+      }
       return res.json({ reply: closingMessage, complete: true, intakeData });
     }
 
     res.json({ reply: replyText, complete: false });
-
   } catch (err) {
     console.error('Chat error:', err);
     res.status(500).json({ error: 'Chat failed' });
   }
 });
 
-// ─── Document generation ──────────────────────────────────────────────────────
-async function generateAndEmail(data) {
-  const isJoint = data.Trust_Type === 'Joint Marital Trust';
-  const templateFile = isJoint ? 'joint_trust.docx' : 'single_trust.docx';
-  const templatePath = path.join(__dirname, 'templates', templateFile);
+// ─── Chat Stream ──────────────────────────────────────────────────────────────
+app.post('/chat-stream', async (req, res) => {
+  const { messages, trustType } = req.body;
 
-  if (!fs.existsSync(templatePath)) {
-    console.error(`Template not found: ${templatePath}`);
-    return;
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  let fullText = '';
+
+  try {
+    const stream = anthropic.messages.stream({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2000,
+      system: getSystemPrompt(trustType),
+      messages
+    });
+
+    stream.on('text', (text) => {
+      fullText += text;
+      res.write(`data: ${JSON.stringify({ type: 'text', text })}\n\n`);
+    });
+
+    stream.on('finalMessage', () => {
+      if (fullText.includes('[INTAKE_COMPLETE]')) {
+        const parts = fullText.split('[INTAKE_COMPLETE]');
+        const closingMessage = parts[0].trim();
+        const jsonStr = parts[1].trim();
+        let intakeData;
+        try {
+          intakeData = JSON.parse(jsonStr);
+          // Route to correct doc gen function based on trust type
+          if (trustType === 'single') {
+            generateAndEmailSingle(intakeData).catch(err => console.error('Single doc gen error:', err));
+          } else {
+            generateAndEmail(intakeData).catch(err => console.error('Doc gen error:', err));
+          }
+          res.write(`data: ${JSON.stringify({ type: 'complete', reply: closingMessage, intakeData })}\n\n`);
+        } catch (e) {
+          console.error('Stream JSON parse error — likely token limit cut off JSON. Length:', jsonStr.length, 'Error:', e.message);
+          console.error('JSON preview:', jsonStr.substring(0, 200));
+          res.write(`data: ${JSON.stringify({ type: 'done', reply: closingMessage })}\n\n`);
+        }
+      } else {
+        res.write(`data: ${JSON.stringify({ type: 'done', reply: fullText })}\n\n`);
+      }
+      res.end();
+    });
+
+    stream.on('error', (err) => {
+      console.error('Stream error:', err);
+      res.write(`data: ${JSON.stringify({ type: 'error', message: 'Stream error' })}\n\n`);
+      res.end();
+    });
+
+  } catch (err) {
+    console.error('Chat stream error:', err);
+    res.write(`data: ${JSON.stringify({ type: 'error', message: 'Failed to start stream' })}\n\n`);
+    res.end();
   }
+});
 
-  // Load template
+// ─── Document generation — Married/Joint Trust ───────────────────────────────
+async function generateAndEmail(data) {
+  const templatePath = path.join(__dirname, 'templates', 'joint_trust.docx');
+  if (!fs.existsSync(templatePath)) { console.error('Template not found'); return; }
+
   const content = fs.readFileSync(templatePath, 'binary');
   const zip = new PizZip(content);
+
+  const lastName = data.Your_Last_Name || 'Client';
+  const mergeData = {
+    Your_First_Name:                  data.Your_First_Name || '',
+    Your_Last_Name:                   data.Your_Last_Name || '',
+    Your_Birth_Date:                  data.Your_Birth_Date || '',
+    Your_Preferred_Signature_Name:    data.Your_Preferred_Signature_Name || `${data.Your_First_Name || ''} ${data.Your_Middle_Name || ''} ${data.Your_Last_Name || ''}`.replace(/\s+/g,' ').trim(),
+    Your_Cell_Phone:                  data.Your_Cell_Phone || '',
+    Your_Work_Phone_Number:           data.Your_Work_Phone_Number || 'N/A',
+    Address:                          data.Address || '',
+    City:                             data.City || '',
+    State:                            data.State || 'Utah',
+    Zip_Code:                         data.Zip_Code || '',
+    County:                           data.County || '',
+    Spouse_First_Name:                data.Spouse_First_Name || '',
+    Spouse_Birth_Date:                data.Spouse_Birth_Date || '',
+    Spouses_Preferred_Signature_Name: data.Spouses_Preferred_Signature_Name || `${data.Spouse_First_Name || ''} ${data.Spouse_Middle_Name || ''} ${data.Your_Last_Name || ''}`.replace(/\s+/g,' ').trim(),
+    Spouse_Cell_Phone:                data.Spouse_Cell_Phone || '',
+    Spouse_Work_Phone_Number:         data.Spouse_Work_Phone_Number || 'N/A',
+    Full_Legal_Names_of_Children:     data.Full_Legal_Names_of_Children || 'None',
+    Name_of_Trust:                    data.Name_of_Trust || `The ${lastName} Family Trust`,
+    NAME_OF_TRUST:                    data.Name_of_Trust || `The ${lastName} Family Trust`,
+    First_Choice_Successor_Trustee:   data.First_Choice_Successor_Trustee || '',
+    Second_Choice_Successor_Trustee:  data.Second_Choice_Successor_Trustee || '',
+    'Second_Choice_Successor_Trustee_': data.Second_Choice_Successor_Trustee || '',
+    First_Choice_Successor_Trustee_Guardian: data.Guardian_Option === 'B' ? (data.First_Choice_Guardian || '') : (data.First_Choice_Successor_Trustee || ''),
+    Second_Choice_Successor_Trustee_Guardian: data.Guardian_Option === 'B' ? (data.Backup_Guardian || '') : (data.Second_Choice_Successor_Trustee || ''),
+    Alternate_Agent_Name:             data.Alternate_Agent_Name || '',
+    Alternate_Agent_Address:          data.Alternate_Agent_Address || '',
+    Alternate_Agent_City:             data.Alternate_Agent_City || '',
+    Alternate_Agent_State:            data.Alternate_Agent_State || '',
+    Alternate_Agent_Zip:              data.Alternate_Agent_Zip || '',
+    Alternate_Agent_Cell_Phone:       data.Alternate_Agent_Cell_Phone || '',
+    Alternate_Agent_Work_Phone:       data.Alternate_Agent_Work_Phone || 'N/A',
+  };
+
+  Object.keys(zip.files).forEach(filename => {
+    if (
+      (filename.startsWith('word/footer') || filename.startsWith('word/header')) &&
+      filename.endsWith('.xml')
+    ) {
+      try {
+        let fileContent = zip.files[filename].asText();
+        Object.entries(mergeData).forEach(([key, value]) => {
+          fileContent = fileContent.replace(new RegExp(`\u00ABr${key}\u00BB`, 'g'), value || '___________');
+          fileContent = fileContent.replace(new RegExp(`\u00AB${key}\u00BB`, 'g'), value || '___________');
+        });
+        zip.file(filename, fileContent);
+      } catch (e) { /* skip binary files */ }
+    }
+  });
 
   const doc = new Docxtemplater(zip, {
     paragraphLoop: true,
     linebreaks: true,
-    delimiters: { start: '«', end: '»' },
-    nullGetter: () => '___________', // blank line for any missing field
+    delimiters: { start: '\u00AB', end: '\u00BB' },
+    nullGetter: () => '___________',
   });
-
-  // Build merge data — map our JSON keys to template merge fields
-  const mergeData = {
-    Your_First_Name:                data.Your_First_Name || '',
-    Your_Last_Name:                 data.Your_Last_Name || '',
-    Your_Birth_Date:                data.Your_Birth_Date || '',
-    Your_Preferred_Signature_Name:  data.Your_Preferred_Signature_Name || '',
-    Your_Cell_Phone:                data.Your_Cell_Phone || '',
-    Your_Work_Phone_Number:         data.Your_Work_Phone_Number || 'N/A',
-    Address:                        data.Address || '',
-    City:                           data.City || '',
-    State:                          data.State || 'Utah',
-    Zip_Code:                       data.Zip_Code || '',
-    County:                         data.County || '',
-    Spouse_First_Name:              data.Spouse_First_Name || '',
-    Spouse_Birth_Date:              data.Spouse_Birth_Date || '',
-    Spouses_Preferred_Signature_Name: data.Spouses_Preferred_Signature_Name || '',
-    Spouse_Cell_Phone:              data.Spouse_Cell_Phone || '',
-    Spouse_Work_Phone_Number:       data.Spouse_Work_Phone_Number || 'N/A',
-    Full_Legal_Names_of_Children:   data.Full_Legal_Names_of_Children || 'None',
-    Name_of_Trust:                  data.Name_of_Trust || `${data.Your_Last_Name} Family Trust`,
-    NAME_OF_TRUST:                  data.Name_of_Trust || `${data.Your_Last_Name} Family Trust`, // single trust variant
-    First_Choice_Successor_Trustee: data.First_Choice_Successor_Trustee || '',
-    Second_Choice_Successor_Trustee: data.Second_Choice_Successor_Trustee || '',
-    'Second_Choice_Successor_Trustee_': data.Second_Choice_Successor_Trustee || '', // single trust variant
-    // Primary healthcare agent
-    HC_Primary_Agent_Name:          data.HC_Primary_Agent_Name || '',
-    HC_Primary_Agent_Address:       data.HC_Primary_Agent_Address || '',
-    HC_Primary_Agent_City:          data.HC_Primary_Agent_City || '',
-    HC_Primary_Agent_State:         data.HC_Primary_Agent_State || '',
-    HC_Primary_Agent_Zip:           data.HC_Primary_Agent_Zip || '',
-    HC_Primary_Agent_Cell_Phone:    data.HC_Primary_Agent_Cell_Phone || '',
-    HC_Primary_Agent_Work_Phone:    data.HC_Primary_Agent_Work_Phone || 'N/A',
-    // Backup healthcare agent (template "Alternate_Agent_*")
-    Alternate_Agent_Name:           data.Alternate_Agent_Name || '',
-    Alternate_Agent_Address:        data.Alternate_Agent_Address || '',
-    Alternate_Agent_City:           data.Alternate_Agent_City || '',
-    Alternate_Agent_State:          data.Alternate_Agent_State || '',
-    Alternate_Agent_Zip:            data.Alternate_Agent_Zip || '',
-    Alternate_Agent_Cell_Phone:     data.Alternate_Agent_Cell_Phone || '',
-    Alternate_Agent_Work_Phone:     data.Alternate_Agent_Work_Phone || 'N/A',
-    // POA backup agent (POA primary defaults to First Choice Successor Trustee unless overridden)
-    POA_Backup_Agent_Name:          data.POA_Backup_Agent_Name || '',
-    POA_Backup_Agent_Address:       data.POA_Backup_Agent_Address || '',
-    POA_Backup_Agent_City:          data.POA_Backup_Agent_City || '',
-    POA_Backup_Agent_State:         data.POA_Backup_Agent_State || '',
-    POA_Backup_Agent_Zip:           data.POA_Backup_Agent_Zip || '',
-    POA_Backup_Agent_Cell_Phone:    data.POA_Backup_Agent_Cell_Phone || '',
-    POA_Backup_Agent_Work_Phone:    data.POA_Backup_Agent_Work_Phone || 'N/A',
-  };
 
   doc.render(mergeData);
 
   const buf = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
+  const dateStr = new Date().toISOString().slice(0,10);
+  const filename = `${lastName.replace(/\s+/g,'_')}_Joint_Trust_Draft_${dateStr}.docx`;
 
-  // Build filename
-  const lastName = (data.Your_Last_Name || 'Client').replace(/\s+/g, '_');
-  const dateStr  = new Date().toISOString().slice(0,10);
-  const filename = `${lastName}_${isJoint ? 'Joint' : 'Single'}_Trust_Draft_${dateStr}.docx`;
+  await sendEmail(data, buf, filename, 'joint');
+}
 
-  // Send email
-  await sendEmail(data, buf, filename);
+// ─── Document generation — Single Person Trust ───────────────────────────────
+async function generateAndEmailSingle(data) {
+  const templatePath = path.join(__dirname, 'templates', 'single_trust.docx');
+  if (!fs.existsSync(templatePath)) { console.error('Single trust template not found'); return; }
+
+  const content = fs.readFileSync(templatePath, 'binary');
+  const zip = new PizZip(content);
+
+  const lastName = data.Your_Last_Name || 'Client';
+  const mergeData = {
+    Your_First_Name:                  data.Your_First_Name || '',
+    Your_Last_Name:                   data.Your_Last_Name || '',
+    Your_Birth_Date:                  data.Your_Birth_Date || '',
+    Your_Preferred_Signature_Name:    data.Your_Preferred_Signature_Name || `${data.Your_First_Name || ''} ${data.Your_Last_Name || ''}`.trim(),
+    Your_Cell_Phone:                  data.Your_Cell_Phone || '',
+    Your_Work_Phone_Number:           data.Your_Work_Phone_Number || 'N/A',
+    Address:                          data.Address || '',
+    City:                             data.City || '',
+    State:                            data.State || 'Utah',
+    Zip_Code:                         data.Zip_Code || '',
+    County:                           data.County || '',
+    Name_of_Trust:                    data.Name_of_Trust || `The ${data.Your_Preferred_Signature_Name || lastName} Revocable Living Trust`,
+    First_Choice_Successor_Trustee:   data.First_Choice_Successor_Trustee || '',
+    Second_Choice_Successor_Trustee:  data.Second_Choice_Successor_Trustee || '',
+    // Guardian: use named guardian if different, otherwise use successor trustee
+    Guardian_Name:                    data.Guardian_Option === 'B' ? (data.Guardian_Name || '') : (data.First_Choice_Successor_Trustee || ''),
+    Full_Legal_Names_of_Children:     data.Full_Legal_Names_of_Children || 'None',
+    // DPOA fields
+    DPOA_Agent_Name:                  data.DPOA_Agent_Name || '',
+    Agent_Address:                    data.Agent_Address || '',
+    Agent_City:                       data.Agent_City || '',
+    Agent_State:                      data.Agent_State || '',
+    Agent_Zip:                        data.Agent_Zip || '',
+    // Healthcare directive fields
+    Agent_Name:                       data.Agent_Name || '',
+    Agent_Cell_Phone:                 data.Agent_Cell_Phone || '',
+    Agent_Work_Phone_Number:          data.Agent_Work_Phone_Number || 'N/A',
+    Alternate_Agent_Name:             data.Alternate_Agent_Name || '',
+    Alternate_Agent_Address:          data.Alternate_Agent_Address || '',
+    Alternate_Agent_City:             data.Alternate_Agent_City || '',
+    Alternate_Agent_State:            data.Alternate_Agent_State || '',
+    Alternate_Agent_Zip:              data.Alternate_Agent_Zip || '',
+    Alternate_Agent_Cell_Phone:       data.Alternate_Agent_Cell_Phone || '',
+    Alternate_Agent_Work_Phone:       data.Alternate_Agent_Work_Phone || 'N/A',
+  };
+
+  Object.keys(zip.files).forEach(filename => {
+    if (
+      (filename.startsWith('word/footer') || filename.startsWith('word/header')) &&
+      filename.endsWith('.xml')
+    ) {
+      try {
+        let fileContent = zip.files[filename].asText();
+        Object.entries(mergeData).forEach(([key, value]) => {
+          fileContent = fileContent.replace(new RegExp(`\u00ABr${key}\u00BB`, 'g'), value || '___________');
+          fileContent = fileContent.replace(new RegExp(`\u00AB${key}\u00BB`, 'g'), value || '___________');
+        });
+        zip.file(filename, fileContent);
+      } catch (e) { /* skip binary files */ }
+    }
+  });
+
+  const doc = new Docxtemplater(zip, {
+    paragraphLoop: true,
+    linebreaks: true,
+    delimiters: { start: '\u00AB', end: '\u00BB' },
+    nullGetter: () => '___________',
+  });
+
+  doc.render(mergeData);
+
+  const buf = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
+  const dateStr = new Date().toISOString().slice(0,10);
+  const filename = `${lastName.replace(/\s+/g,'_')}_Single_Trust_Draft_${dateStr}.docx`;
+
+  await sendEmail(data, buf, filename, 'single');
 }
 
 // ─── Email ────────────────────────────────────────────────────────────────────
-async function sendEmail(data, docBuffer, filename) {
+async function sendEmail(data, docBuffer, filename, trustType) {
   const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD }
   });
 
   const clientName = `${data.Your_First_Name || ''} ${data.Your_Last_Name || ''}`.trim();
-  const trustType  = data.Trust_Type || 'Estate Plan';
   const submitted  = new Date().toLocaleString('en-US', { timeZone: 'America/Denver' });
+  const flags = data.Attorney_Flags
+    ? data.Attorney_Flags.split(' | ').map(f => `  ⚑ ${f}`).join('\n')
+    : '  None';
 
-  const emailBody = `
-New estate planning intake completed — ready for paralegal review.
+  let emailBody;
 
-CLIENT: ${clientName}
-TRUST TYPE: ${trustType}
-TRUST NAME: ${data.Name_of_Trust || ''}
-SUBMITTED: ${submitted} (Mountain Time)
+  if (trustType === 'single') {
+    emailBody = `
+New estate planning intake completed — ready for attorney review.
 
-SPOUSE: ${data.Spouse_First_Name ? `${data.Spouse_First_Name} ${data.Your_Last_Name}` : 'N/A'}
-CHILDREN: ${data.Full_Legal_Names_of_Children || 'None listed'}
-SUCCESSOR TRUSTEE 1: ${data.First_Choice_Successor_Trustee || ''}
-SUCCESSOR TRUSTEE 2: ${data.Second_Choice_Successor_Trustee || ''}
-HEALTHCARE AGENT (PRIMARY): ${data.HC_Primary_Agent_Name || ''}
-HEALTHCARE AGENT (BACKUP):  ${data.Alternate_Agent_Name || ''}
-POA PRIMARY AGENT: ${data.POA_Primary_Agent_Name || data.First_Choice_Successor_Trustee || ''}${data.POA_Primary_Same_As_Trustee === 'No' ? '  *** CLIENT REQUESTED SEPARATE PERSON — NOT THE FIRST SUCCESSOR TRUSTEE — please review ***' : ''}
-POA BACKUP AGENT:  ${data.POA_Backup_Agent_Name || ''}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CLIENT INFORMATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Client:         ${clientName}
+Trust Name:     ${data.Name_of_Trust || ''}
+Submitted:      ${submitted} (Mountain Time)
+Address:        ${data.Address || ''}, ${data.City || ''}, ${data.State || ''} ${data.Zip_Code || ''}
+County:         ${data.County || ''}
+Cell Phone:     ${data.Your_Cell_Phone || ''}
+Work Phone:     ${data.Your_Work_Phone_Number || 'N/A'}
+Date of Birth:  ${data.Your_Birth_Date || ''}
 
-ADDRESS: ${data.Address || ''}, ${data.City || ''}, ${data.State || ''} ${data.Zip_Code || ''}
-CLIENT PHONE: ${data.Your_Cell_Phone || ''}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TRUST & TRUSTEES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+First Choice Successor Trustee:   ${data.First_Choice_Successor_Trustee || ''} (${data.First_Choice_Successor_Trustee_Relationship || ''})
+Second Choice Successor Trustee:  ${data.Second_Choice_Successor_Trustee || ''} (${data.Second_Choice_Successor_Trustee_Relationship || ''})
+Guardian Option:                  ${data.Guardian_Option || 'A — same as Successor Trustee'}
+Guardian Name:                    ${data.Guardian_Option === 'B' ? (data.Guardian_Name || '') : 'Same as First Choice Successor Trustee'}
 
-The draft ${filename} is attached. Please review and forward to the supervising attorney.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BENEFICIARIES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Children:          ${data.Full_Legal_Names_of_Children || 'None listed'}
+Children DOBs:     ${data.Children_DOBs || ''}
+Distribution:      ${data.Distribution_Type || 'Equal'}
+Percentages:       ${data.Distribution_Percentages || 'N/A'}
+Inheritance Age:   ${data.Inheritance_Age || 'Not specified'}
 
-— Flex Legal Services Attorneys
-  `.trim();
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FINANCIAL POWER OF ATTORNEY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Primary DPOA Agent:   ${data.DPOA_Agent_Name || ''}
+Backup DPOA Agent:    ${data.First_Choice_Successor_Trustee || ''} (Successor Trustee — automatic backup)
+Agent Address:        ${data.Agent_Address || ''}, ${data.Agent_City || ''}, ${data.Agent_State || ''} ${data.Agent_Zip || ''}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HEALTHCARE DIRECTIVE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Primary Healthcare Agent:   ${data.Agent_Name || ''}
+Agent Phone:                ${data.Agent_Cell_Phone || ''}
+Backup Healthcare Agent:    ${data.Alternate_Agent_Name || ''}
+Backup Address:             ${data.Alternate_Agent_Address || ''}, ${data.Alternate_Agent_City || ''}, ${data.Alternate_Agent_State || ''} ${data.Alternate_Agent_Zip || ''}
+Backup Phone:               ${data.Alternate_Agent_Cell_Phone || ''}
+
+Medical Research:    ${data.Medical_Research || 'Not answered'} (client to initial at signing)
+Organ Donation:      ${data.Organ_Donation || 'Not answered'} (client to initial at signing)
+Living Will:         Option ${data.Living_Will || 'Not selected'} (client to initial at signing)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ATTORNEY FLAGS — ACTION REQUIRED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${flags}
+
+Draft document attached: ${filename}
+— Flex Legal Services Attorneys Intake System
+    `.trim();
+  } else {
+    // Original married trust email body
+    const spouseName = data.Spouse_First_Name ? `${data.Spouse_First_Name} ${data.Your_Last_Name || ''}`.trim() : 'N/A';
+    emailBody = `
+New estate planning intake completed — ready for attorney review.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CLIENT INFORMATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Client:         ${clientName}
+Spouse:         ${spouseName}
+Trust Name:     ${data.Name_of_Trust || ''}
+Submitted:      ${submitted} (Mountain Time)
+Address:        ${data.Address || ''}, ${data.City || ''}, ${data.State || ''} ${data.Zip_Code || ''}
+County:         ${data.County || ''}
+Client Phone:   ${data.Your_Cell_Phone || ''}
+Spouse Phone:   ${data.Spouse_Cell_Phone || ''}
+Spouse Email:   ${data.Spouse_Email || ''}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TRUST & TRUSTEES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+First Choice Successor Trustee:   ${data.First_Choice_Successor_Trustee || ''} (${data.First_Choice_Successor_Trustee_Relationship || ''})
+Second Choice Successor Trustee:  ${data.Second_Choice_Successor_Trustee || ''} (${data.Second_Choice_Successor_Trustee_Relationship || ''})
+Guardian Option:                  ${data.Guardian_Option || 'A'}
+First Choice Guardian:            ${data.Guardian_Option === 'B' ? (data.First_Choice_Guardian || '') : 'Same as First Choice Successor Trustee'}
+Backup Guardian:                  ${data.Guardian_Option === 'B' ? (data.Backup_Guardian || '') : 'Same as Second Choice Successor Trustee'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BENEFICIARIES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Children:          ${data.Full_Legal_Names_of_Children || 'None listed'}
+Children DOBs:     ${data.Children_DOBs || ''}
+Distribution:      ${data.Distribution_Type || 'Equal'}
+Percentages:       ${data.Distribution_Percentages || 'N/A'}
+Inheritance Age:   ${data.Inheritance_Age || 'Not specified'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+POWERS OF ATTORNEY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Financial Agent (Primary):  ${data.Financial_Agent_Primary || ''} (${data.Financial_Agent_Primary_Relationship || ''})
+Financial Agent (Backup):   ${data.Financial_Agent_Backup || ''} (${data.Financial_Agent_Backup_Relationship || ''})
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HEALTHCARE DIRECTIVES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${clientName} Primary Agent:   ${spouseName} (automatic — spouse)
+${clientName} Backup Agent:    ${data.Alternate_Agent_Name || ''} (${data.Alternate_Agent_Relationship || ''})
+${clientName} Backup Address:  ${data.Alternate_Agent_Address || ''}, ${data.Alternate_Agent_City || ''}, ${data.Alternate_Agent_State || ''} ${data.Alternate_Agent_Zip || ''}
+${clientName} Backup Phone:    ${data.Alternate_Agent_Cell_Phone || ''}
+
+${spouseName} Primary Agent:   ${clientName} (automatic — spouse)
+${spouseName} Backup Agent:    ${data.Spouse2_Alternate_Agent_Name || ''} (${data.Spouse2_Alternate_Agent_Relationship || ''})
+${spouseName} Backup Address:  ${data.Spouse2_Alternate_Agent_Address || ''}, ${data.Spouse2_Alternate_Agent_City || ''}, ${data.Spouse2_Alternate_Agent_State || ''} ${data.Spouse2_Alternate_Agent_Zip || ''}
+${spouseName} Backup Phone:    ${data.Spouse2_Alternate_Agent_Cell_Phone || ''}
+
+Medical Research — ${clientName}:  ${data.Medical_Research_Spouse1 || 'Not answered'} (client to initial at signing)
+Medical Research — ${spouseName}:  ${data.Medical_Research_Spouse2 || 'Not answered'} (client to initial at signing)
+Organ Donation — ${clientName}:    ${data.Organ_Donation_Spouse1 || 'Not answered'} (client to initial at signing)
+Organ Donation — ${spouseName}:    ${data.Organ_Donation_Spouse2 || 'Not answered'} (client to initial at signing)
+Living Will — ${clientName}:       Option ${data.Living_Will_Spouse1 || 'Not selected'} (client to initial at signing)
+Living Will — ${spouseName}:       Option ${data.Living_Will_Spouse2 || 'Not selected'} (client to initial at signing)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ATTORNEY FLAGS — ACTION REQUIRED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${flags}
+
+Draft document attached: ${filename}
+— Flex Legal Services Attorneys Intake System
+    `.trim();
+  }
+
+  const subject = trustType === 'single'
+    ? `[INTAKE] ${clientName} — Single Trust — Review Required`
+    : `[INTAKE] ${clientName} — Joint Trust — Review Required`;
 
   await transporter.sendMail({
     from: `"Flex Legal Intake" <${GMAIL_USER}>`,
     to: NOTIFY_EMAIL,
-    subject: `[INTAKE] ${clientName} — ${trustType} — Review Required`,
+    subject,
     text: emailBody,
     attachments: [{
       filename,
@@ -282,12 +923,10 @@ The draft ${filename} is attached. Please review and forward to the supervising 
     }]
   });
 
-  console.log(`Email sent for ${clientName} — ${filename}`);
+  console.log(`Email sent: ${clientName} — ${filename}`);
 }
 
-// ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
-// ─── Start server ─────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Flex Legal intake server running on port ${PORT}`));
