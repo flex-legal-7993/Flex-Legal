@@ -1237,6 +1237,8 @@ function proceedAfterPayment() {
   setTimeout(() => resizeChatInput(), 50);
   init(clientInfo, selectedPackage, '/start-selfservice');
 }
+
+function goBackToPackages() {
   document.getElementById('consentScreen').classList.add('hidden');
   document.getElementById('pkgScreen').classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
