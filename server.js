@@ -748,26 +748,22 @@ BUBBLE 4 — medical research and organ donation:
 Do not populate in document.
 FLAG: "MEDICAL RESEARCH: [answer]. ORGAN DONATION: [answer]. Client to initial."
 
-=== SECTION 5: POUR-OVER WILL ===
+=== SECTION 5: LAST WILL ===
 [Skip entirely if needs_will is false]
 
-Explain simply: "A Pour-Over Will is a legal document that directs any assets in your name at death to be transferred to your trust. It's a safety net for anything that wasn't already titled in your trust's name."
+Explain simply: "A Last Will is a legal document that says who gets your property when you pass away, and who you want to handle your estate. It also lets you name a guardian for any minor children."
 
 Ask: "A few quick questions:
 — Who would you like as your Personal Representative (executor) — the person who handles your estate?
 — Who is your backup Personal Representative?
-— Do you have minor children who need a guardian named?
-— What is the full legal name of your trust?"
-
-Note: Will says "I am not married." Ask: "Is that correct — are you currently unmarried?"
-If NO: FLAG "MARITAL STATUS: Client indicated [status]. Review Will Section 1 before use."
+— Do you have any children? If so, what are their full legal names?
+— Do you have any minor or incapacitated children who need a guardian named? If so, who would you like as First Choice Guardian and Second Choice Guardian?"
 
 Collect:
-- First_Choice_Successor_Trustee
-- Second_Choice_Successor_Trustee
+- First_Choice_Successor_Trustee (primary Personal Representative)
+- Second_Choice_Successor_Trustee (backup Personal Representative)
 - Full_Legal_Names_of_Children
-- Guardian_Name (if minor children — same as personal rep, or different?)
-- Name_of_Trust
+- Guardian_Name (if minor/incapacitated children)
 
 === SECTION 6: FINAL CONFIRMATION ===
 Display a complete organized summary of all information collected, grouped by document.
@@ -1313,7 +1309,7 @@ async function sendEmailStandalone(data, attachments) {
   const docsList = attachments.map(a => `  • ${a.filename}`).join('\n');
   const docsSelected = [
     data.needs_dpoa ? 'Financial Power of Attorney' : null,
-    data.needs_will ? 'Pour-Over Will' : null,
+    data.needs_will ? 'Will' : null,
     data.needs_hcd  ? 'Healthcare Directive' : null,
   ].filter(Boolean).join(', ');
 
@@ -1621,7 +1617,7 @@ async function generateAndEmailSelfService(data) {
     if (buf) attachments.push({ filename: `${lastName.replace(/\s+/g,'_')}_DPOA_${dateStr}.docx`, content: buf, contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
   }
   if (data.needs_will) {
-    const buf = renderTemplate('will_standalone.docx');
+    const buf = renderTemplate('will_selfservice.docx');
     if (buf) attachments.push({ filename: `${lastName.replace(/\s+/g,'_')}_Will_${dateStr}.docx`, content: buf, contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
   }
   if (data.needs_hcd) {
@@ -1634,7 +1630,7 @@ async function generateAndEmailSelfService(data) {
   const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD } });
   const clientName = `${data.Your_First_Name || ''} ${data.Your_Last_Name || ''}`.trim();
   const submitted  = new Date().toLocaleString('en-US', { timeZone: 'America/Denver' });
-  const docsSelected = [data.needs_dpoa ? 'Financial POA' : null, data.needs_will ? 'Pour-Over Will' : null, data.needs_hcd ? 'Healthcare Directive' : null].filter(Boolean).join(', ');
+  const docsSelected = [data.needs_dpoa ? 'Financial POA' : null, data.needs_will ? 'Last Will' : null, data.needs_hcd ? 'Healthcare Directive' : null].filter(Boolean).join(', ');
 
   // Email to client
   if (clientEmail) {
