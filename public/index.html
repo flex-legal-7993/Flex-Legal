@@ -815,6 +815,28 @@
   .payment-btn:hover { background: var(--gold); }
   .payment-disclaimer { font-size: 11px; color: var(--text-light); text-align: center; line-height: 1.6; }
 
+  /* Self-service prominent disclaimer */
+  .selfservice-warning {
+    background: #fff3cd;
+    border: 2px solid #d4a017;
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+  }
+  .selfservice-warning-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #856404;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+  }
+  .selfservice-warning-text {
+    font-size: 13px;
+    color: #664d03;
+    line-height: 1.6;
+  }
+
   /* Utility */
   .hidden { display: none !important; }
   
@@ -852,7 +874,7 @@
       </div>
       <div class="intro-meta-item">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        Attorney-client privilege protected
+        Confidential &amp; secure
       </div>
       <div class="intro-meta-item">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13.5 19.79 19.79 0 0 1 1.61 4.93 2 2 0 0 1 3.59 3h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 10.5a16 16 0 0 0 6 6l.92-.92a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.72 18z"/></svg>
@@ -974,7 +996,7 @@
     </div>
 
     <button class="pkg-continue-btn" id="pkgContinueBtn" onclick="proceedToConsent()" disabled>Continue to Review &amp; Consent</button>
-    <div class="pkg-footer-note">Flex Legal Services LLC &middot; Licensed in Utah &middot; Attorney-client privilege protected</div>
+    <div class="pkg-footer-note" id="pkgFooterNote">Flex Legal Services LLC &middot; Licensed in Utah &middot; Attorney-client privilege protected</div>
 
   </div>
 
@@ -991,36 +1013,29 @@
     <div class="consent-body" id="consentBody">
 
       <div>
-        <div class="consent-section-title">Nature of This Intake</div>
-        <div class="consent-section-text">This intake is conducted under the direction and supervision of Flex Legal Services Attorneys, licensed attorneys in Utah (Flex Legal Services LLC). The information you provide is collected for the purpose of preparing your estate planning documents and establishing an attorney-client relationship with Flex Legal Services LLC.</div>
+        <div class="consent-section-title">Engagement of Services</div>
+        <div class="consent-section-text">By proceeding with this intake, you are engaging Flex Legal Services LLC, licensed attorneys in the State of Utah, to prepare the estate planning documents you have selected. This engagement establishes an attorney-client relationship between you and Flex Legal Services LLC, effective immediately.</div>
       </div>
 
       <div class="consent-divider"></div>
 
       <div>
-        <div class="consent-section-title">Attorney-Client Relationship</div>
-        <div class="consent-section-text">By completing this intake, you are engaging Flex Legal Services LLC to provide estate planning legal services. This engagement is governed by the Utah Rules of Professional Conduct. All information you share during this intake is confidential and treated as attorney-client privileged communication from the moment you begin.</div>
+        <div class="consent-section-title">Attorney-Client Privilege</div>
+        <div class="consent-section-text">All information you provide during this intake is confidential and protected by attorney-client privilege. Your information will not be shared with third parties or used for any purpose other than preparing your estate planning documents.</div>
       </div>
 
       <div class="consent-divider"></div>
 
       <div>
         <div class="consent-section-title">Use of AI Technology</div>
-        <div class="consent-section-text">This intake uses an artificial intelligence system to conduct your interview. The AI operates under attorney direction and supervision as required by Utah RPC 1.1 and 5.3. Your information is processed through Anthropic's commercial API under enterprise terms that prohibit use of your data for AI training. No information you provide is shared with third parties or used for any purpose other than preparing your estate planning documents.</div>
-      </div>
-
-      <div class="consent-divider"></div>
-
-      <div>
-        <div class="consent-section-title">No Advice During Intake</div>
-        <div class="consent-section-text">The AI intake assistant does not provide legal advice. All legal judgment, document review, and advice is provided exclusively by Flex Legal Services Attorneys. If you have legal questions, they will be addressed at your document review and signing appointment.</div>
+        <div class="consent-section-text">This intake uses an artificial intelligence system to conduct your interview. The AI operates under attorney direction and supervision as required by Utah Rules of Professional Conduct 1.1 and 5.3. Your information is processed through Anthropic's commercial API under enterprise terms that prohibit use of your data for AI training. The AI does not provide legal advice &mdash; all legal judgment, document review, and advice is provided exclusively by Flex Legal Services attorneys.</div>
       </div>
 
       <div class="consent-divider"></div>
 
       <div>
         <div class="consent-section-title">Scope of Representation</div>
-        <div class="consent-section-text">Flex Legal Services LLC is being retained solely for the preparation of the estate planning documents you select. This engagement does not create an ongoing general counsel relationship unless separately agreed in writing.</div>
+        <div class="consent-section-text">This engagement is limited to the preparation of the estate planning documents you select. It does not create an ongoing attorney-client or general counsel relationship unless separately agreed in writing.</div>
       </div>
 
       <div class="consent-divider"></div>
@@ -1034,7 +1049,7 @@
 
       <div class="consent-agree-row">
         <input type="checkbox" class="consent-checkbox" id="consentCheckbox" />
-        <label for="consentCheckbox" class="consent-agree-text">I have read and understood the above disclosure. I consent to proceed with the attorney-directed AI intake and to the establishment of an attorney-client relationship with Flex Legal Services LLC.</label>
+        <label for="consentCheckbox" class="consent-agree-text">I have read and understood this engagement agreement. I consent to the establishment of an attorney-client relationship with Flex Legal Services LLC and to the use of AI technology under attorney supervision for my intake.</label>
       </div>
 
       <button class="consent-btn" id="consentBtn" disabled>Begin My Estate Plan</button>
@@ -1106,7 +1121,7 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
       </div>
-      <div class="chat-footer-note">This intake is attorney-directed by Flex Legal Services Attorneys &mdash; Flex Legal Services LLC. Your responses are confidential and protected under attorney-client privilege. AI technology is used under attorney supervision pursuant to Utah RPC 1.1 and 5.3. Licensed in Utah.</div>
+      <div class="chat-footer-note" id="chatFooterNote">This intake is attorney-directed by Flex Legal Services Attorneys &mdash; Flex Legal Services LLC. Your responses are confidential and protected under attorney-client privilege. AI technology is used under attorney supervision pursuant to Utah RPC 1.1 and 5.3. Licensed in Utah.</div>
     </div>
   </div>
 
@@ -1234,6 +1249,9 @@ function proceedAfterPayment() {
   document.getElementById('paymentScreen').classList.add('hidden');
   document.getElementById('progressWrap').classList.remove('hidden');
   document.getElementById('chatCard').classList.remove('hidden');
+  // Self-service chat footer — no attorney-client relationship
+  const ssFooter = document.getElementById('chatFooterNote');
+  if (ssFooter) ssFooter.textContent = 'This is a document preparation service only. No attorney-client relationship is created. AI technology is used to collect your information \u2014 it does not provide legal advice. Flex Legal Services LLC \u2014 Licensed in Utah.';
   setTimeout(() => resizeChatInput(), 50);
   init(clientInfo, selectedPackage, '/start-selfservice');
 }
@@ -1295,6 +1313,14 @@ function selectPackage(packageName, cardEl) {
   cardEl.classList.add('selected');
   selectedPackage = packageName;
   updatePkgContinueBtn();
+  // Update footer based on package type
+  const footerNote = document.getElementById('pkgFooterNote');
+  if (footerNote) {
+    const isSS = packageName.includes('Self-Service');
+    footerNote.textContent = isSS
+      ? 'Flex Legal Services LLC \u00B7 Licensed in Utah \u00B7 No attorney-client relationship created'
+      : 'Flex Legal Services LLC \u00B7 Licensed in Utah \u00B7 Attorney-client privilege protected';
+  }
 }
 
 function updatePkgContinueBtn() {
@@ -1333,26 +1359,24 @@ function proceedToConsent() {
 
   if (trustType === 'selfservice') {
     if (consentTitle) consentTitle.textContent = 'Document Builder — Disclosure & Acknowledgment';
-    if (consentAgreeText) consentAgreeText.textContent = 'I understand this is a document preparation service only. No attorney-client relationship is created. I agree to review my completed document with a licensed attorney before signing.';
     if (consentBodyEl) consentBodyEl.innerHTML = `
+      <div class="selfservice-warning">
+        <div class="selfservice-warning-title">Important — No Attorney-Client Relationship</div>
+        <div class="selfservice-warning-text">This is a document preparation service only. Selecting this package <strong>does not</strong> create an attorney-client relationship with Flex Legal Services LLC or any of its attorneys. Your documents will be generated based on the information you provide and <strong>will not be reviewed by an attorney</strong>. We strongly recommend having a licensed attorney review your documents before signing. If you would like attorney-directed estate planning with the protection of attorney-client privilege, please go back and select one of our attorney-directed packages.</div>
+      </div>
       <div>
         <div class="consent-section-title">Document Preparation Service</div>
-        <div class="consent-section-text">Flex Legal Services LLC is providing a document preparation service only. This service fills in legal document templates based on the information you provide. It does not constitute legal advice and does not create an attorney-client relationship.</div>
-      </div>
-      <div class="consent-divider"></div>
-      <div>
-        <div class="consent-section-title">No Attorney-Client Relationship</div>
-        <div class="consent-section-text">Using this service does not create an attorney-client relationship with Flex Legal Services LLC or any of its attorneys. The documents prepared are based solely on the information you provide and have not been reviewed by an attorney.</div>
-      </div>
-      <div class="consent-divider"></div>
-      <div>
-        <div class="consent-section-title">Review With an Attorney</div>
-        <div class="consent-section-text">We strongly recommend that you have a licensed attorney review your completed documents before signing them. Laws vary by state and individual circumstances vary — an attorney can ensure your documents are appropriate for your specific situation.</div>
+        <div class="consent-section-text">Flex Legal Services LLC is providing a document preparation service only. This service uses an AI system to collect your information and populate legal document templates. It does not constitute legal advice and does not create an attorney-client relationship.</div>
       </div>
       <div class="consent-divider"></div>
       <div>
         <div class="consent-section-title">Use of AI Technology</div>
-        <div class="consent-section-text">This service uses an AI system to collect your information and populate your documents. Your information is processed through Anthropic's commercial API under enterprise terms that prohibit use of your data for AI training. No information you provide is shared with third parties.</div>
+        <div class="consent-section-text">This service uses an artificial intelligence system to collect your information and generate your documents. Your information is processed through Anthropic's commercial API under enterprise terms that prohibit use of your data for AI training. The AI does not provide legal advice. No information you provide is shared with third parties.</div>
+      </div>
+      <div class="consent-divider"></div>
+      <div>
+        <div class="consent-section-title">Review With an Attorney</div>
+        <div class="consent-section-text">We strongly recommend that you have a licensed attorney review your completed documents before signing them. Laws vary by state and individual circumstances vary &mdash; an attorney can ensure your documents are appropriate for your specific situation.</div>
       </div>
       <div class="consent-divider"></div>
       <div>
@@ -1362,7 +1386,7 @@ function proceedToConsent() {
       <div class="consent-divider"></div>
       <div class="consent-agree-row">
         <input type="checkbox" class="consent-checkbox" id="consentCheckbox" />
-        <label for="consentCheckbox" class="consent-agree-text">I understand this is a document preparation service only. No attorney-client relationship is created. I agree to review my completed document with a licensed attorney before signing.</label>
+        <label for="consentCheckbox" class="consent-agree-text">I understand this is a document preparation service only. No attorney-client relationship is created. I agree to review my completed documents with a licensed attorney before signing.</label>
       </div>
       <button class="consent-btn" id="consentBtn" disabled>Continue to Document Builder</button>
       <div class="consent-timestamp">Flex Legal Services LLC &mdash; Document Preparation Service &mdash; <span id="consentDateDisplay"></span></div>
@@ -1384,8 +1408,8 @@ function proceedToConsent() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   } else {
-    if (consentTitle) consentTitle.textContent = 'Estate Planning Intake — Disclosure & Consent';
-    if (consentAgreeText) consentAgreeText.textContent = 'I have read and understood the above disclosure. I consent to proceed with the attorney-directed AI intake and to the establishment of an attorney-client relationship with Flex Legal Services LLC.';
+    if (consentTitle) consentTitle.textContent = 'Estate Planning Intake — Engagement Agreement & Consent';
+    if (consentAgreeText) consentAgreeText.textContent = 'I have read and understood this engagement agreement. I consent to the establishment of an attorney-client relationship with Flex Legal Services LLC and to the use of AI technology under attorney supervision for my intake.';
     // Restore button text for attorney flow
     const consentBtnEl = document.getElementById('consentBtn');
     if (consentBtnEl) consentBtnEl.textContent = 'Begin My Estate Plan';
