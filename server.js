@@ -753,17 +753,35 @@ FLAG: "MEDICAL RESEARCH: [answer]. ORGAN DONATION: [answer]. Client to initial."
 
 Explain simply: "A Last Will is a legal document that says who gets your property when you pass away, and who you want to handle your estate. It also lets you name a guardian for any minor children."
 
-Ask: "A few quick questions:
-— Who would you like as your Personal Representative (executor) — the person who handles your estate?
-— Who is your backup Personal Representative?
-— Do you have any children? If so, what are their full legal names?
-— Do you have any minor or incapacitated children who need a guardian named? If so, who would you like as First Choice Guardian and Second Choice Guardian?"
+BUBBLE 1 — Personal Representative:
+Ask: "Who would you like as your Personal Representative — that's the person who handles your estate after you pass? And who would be your backup if that person can't serve?"
+
+Collect: First_Choice_Personal_Rep, Second_Choice_Personal_Rep
+
+BUBBLE 2 — Children / Beneficiaries:
+Ask: "Do you have any children?"
+
+If YES:
+  Ask: "What are their full legal names?"
+  Set has_children = true
+  Set Beneficiary_Names = the children's names
+  Ask: "Do any of your children have a minor or incapacitated child who would need a guardian?"
+  If YES:
+    Set has_minor_children = true
+    Ask: "Who would you like as First Choice Guardian and Second Choice Guardian?"
+    Collect: First_Choice_Guardian, Second_Choice_Guardian
+
+If NO:
+  Set has_children = false
+  Ask: "Who would you like to name as your beneficiaries — the people who will receive your property?"
+  Set Beneficiary_Names = the named beneficiaries
 
 Collect:
-- First_Choice_Successor_Trustee (primary Personal Representative)
-- Second_Choice_Successor_Trustee (backup Personal Representative)
-- Full_Legal_Names_of_Children
-- Guardian_Name (if minor/incapacitated children)
+- has_children (true/false)
+- has_minor_children (true/false)
+- Beneficiary_Names (children's names OR named beneficiaries)
+- First_Choice_Guardian (if minor children)
+- Second_Choice_Guardian (if minor children)
 
 === SECTION 6: FINAL CONFIRMATION ===
 Display a complete organized summary of all information collected, grouped by document.
@@ -815,11 +833,13 @@ Then immediately output the JSON:
   "Agent_City": "",
   "Agent_State": "",
   "Agent_Zip": "",
-  "First_Choice_Successor_Trustee": "",
-  "Second_Choice_Successor_Trustee": "",
-  "Name_of_Trust": "",
-  "Full_Legal_Names_of_Children": "",
-  "Guardian_Name": "",
+  "First_Choice_Personal_Rep": "",
+  "Second_Choice_Personal_Rep": "",
+  "has_children": false,
+  "has_minor_children": false,
+  "Beneficiary_Names": "",
+  "First_Choice_Guardian": "",
+  "Second_Choice_Guardian": "",
   "Agent_Name": "",
   "Agent_Cell_Phone": "",
   "Agent_Work_Phone_Number": "N/A",
@@ -1552,6 +1572,41 @@ async function generateAndEmailSelfService(data) {
   const clientEmail = data.client_email || null;
   const attachments = [];
 
+  // --- Build conditional will fields ---
+  const hasChildren = data.has_children === true || data.has_children === 'true';
+  const hasMinorChildren = data.has_minor_children === true || data.has_minor_children === 'true';
+  const beneficiaryNames = data.Beneficiary_Names || data.Full_Legal_Names_of_Children || '';
+  const firstPR = data.First_Choice_Personal_Rep || data.First_Choice_Successor_Trustee || '';
+  const secondPR = data.Second_Choice_Personal_Rep || data.Second_Choice_Successor_Trustee || '';
+  const firstGuardian = data.First_Choice_Guardian || '';
+  const secondGuardian = data.Second_Choice_Guardian || '';
+
+  // Family Statement (Section 1)
+  const familyStatement = hasChildren
+    ? 'I have the following children'
+    : 'I have no children. I designate the following as my named beneficiaries';
+
+  // Guardian Section (Section 2C-D) — only if minor/incapacitated children
+  let guardianSection = '';
+  if (hasMinorChildren && firstGuardian) {
+    guardianSection = `C.  If I am survived by a minor or incapacitated child, I appoint the following to act in the priority and sequence named, as Guardian of the person and estate of any such child:\n\n` +
+      `    1.  ${firstGuardian}; and then\n\n` +
+      `    2.  ${secondGuardian || '___________'}; and then\n\n` +
+      `    3.  Whomsoever a majority of my surviving, competent descendants shall appoint in writing with voting rights allocated among them upon the principle of representation.\n\n` +
+      `D.  Based on my best judgment, these people as guardians will serve the best interests of my children. If the appointed Guardian is unable, unwilling, or ceases to act, the next named nominee shall act instead. The appointment of the Guardian named above shall be effective upon the filing of the petition and affidavit of acceptance as provided in Section 75-5-202.5 U.C.A. (1953, as amended).`;
+  }
+  const bondLabel = hasMinorChildren && firstGuardian ? 'E.' : 'C.';
+  const bondGuardianClause = hasMinorChildren && firstGuardian ? ' or by my Guardian' : '';
+
+  // Personal Property Distribution (Section 4B)
+  const recipientTerm = hasChildren ? 'children' : 'beneficiaries';
+  const personalPropertyDistribution = `Otherwise, I give all my household furniture and furnishings, jewelry, clothing, china, silverware, books, pictures, personal automobiles, and all other tangible articles of household or personal use or adornment, or my interest in such property, together with any insurance on the property, to my ${recipientTerm} who survive me, to be divided among them in equal shares as they shall agree (taking into consideration all specific gifts to any of my ${recipientTerm} pursuant to the Memorandum mentioned above). If my ${recipientTerm} are unable to agree upon a division within sixty (60) days of my death, my Personal Representative shall divide such property (including such specific gifts) among my ${recipientTerm} in substantially equal shares, as my Personal Representative in his or her discretion deems practical, having due regard to the personal preferences of my ${recipientTerm}, and without being required to achieve exact equality in monetary value. My ${recipientTerm} shall have the use and possession of the property described in this paragraph during the period of administration of my estate without necessity for bond.`;
+
+  // Residuary Distribution (Section 5B)
+  const residuaryDistribution = hasChildren
+    ? `I give my Residuary Estate to my children who survive me, in equal shares. If any child of mine predeceases me but leaves descendants who survive me, such deceased child\u2019s share shall be distributed to those descendants by right of representation. If none of my children or their descendants survive me, I give my Residuary Estate to my heirs at law as determined under the laws of the State of Utah then in effect.`
+    : `I give my Residuary Estate to my named beneficiaries who survive me, in equal shares. If any named beneficiary predeceases me, that beneficiary\u2019s share shall be distributed equally among the remaining surviving beneficiaries. If none of my named beneficiaries survive me, I give my Residuary Estate to my heirs at law as determined under the laws of the State of Utah then in effect.`;
+
   const mergeData = {
     Your_First_Name:               data.Your_First_Name || '',
     Your_Last_Name:                data.Your_Last_Name || '',
@@ -1564,11 +1619,24 @@ async function generateAndEmailSelfService(data) {
     State:                         'Utah',
     Zip_Code:                      data.Zip_Code || '',
     County:                        data.County || '',
-    Name_of_Trust:                 data.Name_of_Trust || '',
-    First_Choice_Successor_Trustee:  data.First_Choice_Successor_Trustee || '',
-    Second_Choice_Successor_Trustee: data.Second_Choice_Successor_Trustee || '',
-    Guardian_Name:                 data.Guardian_Name || '',
-    Full_Legal_Names_of_Children:  data.Full_Legal_Names_of_Children || 'None',
+    // Will-specific conditional fields
+    Family_Statement:              familyStatement,
+    Beneficiary_Names:             beneficiaryNames,
+    First_Choice_Personal_Rep:     firstPR,
+    Second_Choice_Personal_Rep:    secondPR,
+    First_Choice_Guardian:         firstGuardian,
+    Second_Choice_Guardian:        secondGuardian,
+    Guardian_Section:              guardianSection,
+    Bond_Label:                    bondLabel,
+    Bond_Guardian_Clause:          bondGuardianClause,
+    Personal_Property_Distribution: personalPropertyDistribution,
+    Residuary_Distribution:        residuaryDistribution,
+    // Legacy field names (for DPOA/HCD templates that still use them)
+    First_Choice_Successor_Trustee:  firstPR,
+    Second_Choice_Successor_Trustee: secondPR,
+    Guardian_Name:                 firstGuardian,
+    Full_Legal_Names_of_Children:  beneficiaryNames || 'None',
+    // DPOA/HCD fields
     DPOA_Agent_Name:               data.DPOA_Agent_Name || '',
     Agent_Address:                 data.Agent_Address || '',
     Agent_City:                    data.Agent_City || '',

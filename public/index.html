@@ -933,9 +933,9 @@
       <div class="pkg-card selfservice" id="pkg-ss-will" onclick="selectPackage('Will — Self-Service', this)">
         <div class="pkg-radio"><div class="pkg-radio-dot"></div></div>
         <div class="pkg-card-content">
-          <div class="pkg-card-title">Pour-Over Will</div>
-          <div class="pkg-card-desc">Prepare your own Pour-Over Will. Directs any assets outside your trust into your trust at death.</div>
-          <div class="pkg-card-includes">Requires an existing trust &middot; Not attorney-reviewed &middot; Review with an attorney before signing</div>
+          <div class="pkg-card-title">Last Will</div>
+          <div class="pkg-card-desc">Prepare your own Last Will. Directs how your property is distributed and names your Personal Representative.</div>
+          <div class="pkg-card-includes">Not attorney-reviewed &middot; Review with an attorney before signing</div>
           <div class="pkg-card-price">$129</div>
         </div>
       </div>
@@ -944,7 +944,7 @@
         <div class="pkg-radio"><div class="pkg-radio-dot"></div></div>
         <div class="pkg-card-content">
           <div class="pkg-card-title">All Three Documents — Bundle</div>
-          <div class="pkg-card-desc">Financial POA, Healthcare Directive, and Pour-Over Will — all three in one package.</div>
+          <div class="pkg-card-desc">Financial POA, Healthcare Directive, and Last Will — all three in one package.</div>
           <div class="pkg-card-includes">Not attorney-reviewed &middot; Review with an attorney before signing</div>
           <div class="pkg-card-price">$299 <span style="font-size:11px;font-weight:400;color:var(--text-light);">Save $88</span></div>
         </div>
@@ -1377,7 +1377,7 @@ function proceedToConsent() {
       if (!newCheckbox || !newCheckbox.checked) return;
       document.getElementById('consentScreen').classList.add('hidden');
       const prices = { 'POA — Self-Service': '$129', 'Healthcare Directive — Self-Service': '$129', 'Will — Self-Service': '$129', 'All Three Documents — Self-Service': '$299' };
-      const titles = { 'POA — Self-Service': 'Financial Power of Attorney', 'Healthcare Directive — Self-Service': 'Healthcare Directive', 'Will — Self-Service': 'Pour-Over Will', 'All Three Documents — Self-Service': 'All Three Documents — Bundle' };
+      const titles = { 'POA — Self-Service': 'Financial Power of Attorney', 'Healthcare Directive — Self-Service': 'Healthcare Directive', 'Will — Self-Service': 'Last Will', 'All Three Documents — Self-Service': 'All Three Documents — Bundle' };
       document.getElementById('paymentTitle').textContent = titles[selectedPackage] || selectedPackage;
       document.getElementById('paymentPrice').textContent = prices[selectedPackage] || '$129';
       document.getElementById('paymentScreen').classList.remove('hidden');
@@ -1626,10 +1626,9 @@ function showConfirmation(data) {
   let fields;
   if (isSelfService) {
     fields = [
-      ['Documents', [data['needs_dpoa'] ? 'Financial POA' : null, data['needs_will'] ? 'Pour-Over Will' : null, data['needs_hcd'] ? 'Healthcare Directive' : null].filter(Boolean).join(', ')],
+      ['Documents', [data['needs_dpoa'] ? 'Financial POA' : null, data['needs_will'] ? 'Last Will' : null, data['needs_hcd'] ? 'Healthcare Directive' : null].filter(Boolean).join(', ')],
       data['needs_dpoa'] ? ['Financial POA Agent', data['DPOA_Agent_Name']] : null,
-      data['needs_will'] ? ['Trust Name', data['Name_of_Trust']] : null,
-      data['needs_will'] ? ['Personal Representative', data['First_Choice_Successor_Trustee']] : null,
+      data['needs_will'] ? ['Personal Representative', data['First_Choice_Personal_Rep']] : null,
       data['needs_hcd'] ? ['Primary Healthcare Agent', data['Agent_Name']] : null,
       data['needs_hcd'] ? ['Backup Healthcare Agent', data['Alternate_Agent_Name']] : null,
       data['needs_hcd'] ? ['Living Will', data['Living_Will'] ? `Option ${data['Living_Will']}` : null] : null,
@@ -1639,7 +1638,7 @@ function showConfirmation(data) {
   } else if (isStandalone) {
     // Standalone docs summary — show only what was selected
     fields = [
-      ['Documents', [data['needs_dpoa'] ? 'Financial POA' : null, data['needs_will'] ? 'Pour-Over Will' : null, data['needs_hcd'] ? 'Healthcare Directive' : null].filter(Boolean).join(', ')],
+      ['Documents', [data['needs_dpoa'] ? 'Financial POA' : null, data['needs_will'] ? 'Will' : null, data['needs_hcd'] ? 'Healthcare Directive' : null].filter(Boolean).join(', ')],
       data['needs_dpoa'] ? ['Financial POA Agent', data['DPOA_Agent_Name']] : null,
       data['needs_dpoa'] ? ['POA Backup Agent', data['First_Choice_Successor_Trustee']] : null,
       data['needs_will'] ? ['Trust Name', data['Name_of_Trust']] : null,
@@ -1774,7 +1773,7 @@ consentBtn.addEventListener('click', () => {
     const titles = {
       'POA — Self-Service': 'Financial Power of Attorney',
       'Healthcare Directive — Self-Service': 'Healthcare Directive',
-      'Will — Self-Service': 'Pour-Over Will',
+      'Will — Self-Service': 'Last Will',
       'All Three Documents — Self-Service': 'All Three Documents — Bundle'
     };
     document.getElementById('paymentTitle').textContent = titles[selectedPackage] || selectedPackage;
