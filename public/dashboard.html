@@ -35,6 +35,7 @@
     background: var(--cream);
     color: var(--text);
     min-height: 100vh;
+    overflow-x: auto;
   }
 
   /* Header */
@@ -78,151 +79,189 @@
     transition: color 0.2s;
   }
   .header-link:hover { color: var(--gold-light); }
-
-  /* Stats bar */
-  .stats-bar {
-    background: var(--white);
-    border-bottom: 1px solid var(--border);
-    padding: 16px 24px;
-    display: flex;
-    gap: 32px;
+  .header-search {
+    padding: 6px 12px;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: 'Source Sans 3', sans-serif;
+    background: rgba(255,255,255,0.08);
+    color: var(--white);
+    width: 220px;
   }
-  .stat-item {
+  .header-search::placeholder { color: rgba(255,255,255,0.4); }
+  .header-search:focus { outline: none; border-color: var(--gold); background: rgba(255,255,255,0.12); }
+
+  /* Kanban board */
+  .board {
+    display: flex;
+    gap: 16px;
+    padding: 20px;
+    min-height: calc(100vh - 60px);
+    align-items: flex-start;
+  }
+
+  .column {
+    flex: 1;
+    min-width: 280px;
+    max-width: 340px;
+    background: var(--cream-dark);
+    border-radius: 12px;
     display: flex;
     flex-direction: column;
-    gap: 2px;
-  }
-  .stat-label {
-    font-size: 11px;
-    color: var(--text-light);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-weight: 600;
-  }
-  .stat-value {
-    font-size: 24px;
-    font-weight: 700;
-    color: var(--navy);
-  }
-  .stat-value.gold { color: var(--gold-dark); }
-
-  /* Main content */
-  .container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 24px;
+    max-height: calc(100vh - 100px);
   }
 
-  /* Filters */
-  .filters {
+  .column-header {
+    padding: 14px 16px;
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 20px;
-  }
-  .filter-btn {
-    padding: 6px 14px;
-    border-radius: 20px;
-    border: 1px solid var(--border);
-    background: var(--white);
-    font-size: 13px;
-    font-family: 'Source Sans 3', sans-serif;
-    color: var(--text-muted);
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-  .filter-btn:hover { border-color: var(--gold); color: var(--text); }
-  .filter-btn.active {
-    background: var(--navy);
-    color: var(--white);
-    border-color: var(--navy);
-  }
-  .filter-search {
-    margin-left: auto;
-    padding: 7px 14px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    font-size: 13px;
-    font-family: 'Source Sans 3', sans-serif;
-    width: 240px;
-    background: var(--white);
-  }
-  .filter-search:focus { outline: none; border-color: var(--gold); }
-
-  /* Client cards */
-  .cards-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-    gap: 16px;
-  }
-  .client-card {
-    background: var(--white);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px;
-    cursor: pointer;
-    transition: all 0.2s;
-    position: relative;
-  }
-  .client-card:hover {
-    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-    border-color: var(--gold-light);
-  }
-  .card-top {
-    display: flex;
     justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 12px;
+    border-bottom: 2px solid transparent;
+    border-radius: 12px 12px 0 0;
+    flex-shrink: 0;
   }
-  .card-name {
-    font-size: 17px;
-    font-weight: 600;
-    color: var(--navy);
+  .column-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
-  .card-email {
+  .column-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+  .column-title {
     font-size: 13px;
-    color: var(--text-muted);
-    margin-top: 2px;
-  }
-  .status-badge {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 12px;
-    font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;
+    color: var(--text);
   }
-  .status-new { background: #dbeafe; color: #1e40af; }
-  .status-reviewed { background: var(--warning-bg); color: var(--warning); }
-  .status-signed { background: var(--success-bg); color: var(--success); }
-  .status-complete { background: #f0fdf4; color: #166534; }
-
-  .card-details {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 16px;
-    margin-top: 10px;
-  }
-  .card-detail {
-    font-size: 12px;
+  .column-count {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1px 8px;
+    font-size: 11px;
+    font-weight: 700;
     color: var(--text-muted);
   }
-  .card-detail strong { color: var(--text); font-weight: 600; }
 
+  /* Column theme colors */
+  .column-new .column-header { border-bottom-color: #3b82f6; }
+  .column-new .column-dot { background: #3b82f6; }
+  .column-reviewed .column-header { border-bottom-color: #f59e0b; }
+  .column-reviewed .column-dot { background: #f59e0b; }
+  .column-signed .column-header { border-bottom-color: #8b5cf6; }
+  .column-signed .column-dot { background: #8b5cf6; }
+  .column-complete .column-header { border-bottom-color: #22c55e; }
+  .column-complete .column-dot { background: #22c55e; }
+
+  .column-body {
+    padding: 8px;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 100px;
+  }
+
+  /* Drop zone visual feedback */
+  .column-body.drag-over {
+    background: rgba(201, 168, 76, 0.08);
+    border-radius: 0 0 12px 12px;
+  }
+
+  /* Client cards */
+  .client-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    cursor: grab;
+    transition: all 0.2s;
+    position: relative;
+    user-select: none;
+  }
+  .client-card:hover {
+    box-shadow: 0 3px 12px rgba(0,0,0,0.08);
+    border-color: var(--gold-light);
+  }
+  .client-card:active { cursor: grabbing; }
+  .client-card.dragging {
+    opacity: 0.5;
+    transform: rotate(2deg);
+  }
+
+  .card-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--navy);
+    margin-bottom: 2px;
+  }
+  .card-email {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  .card-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: var(--text-light);
+  }
+  .card-package {
+    background: var(--cream);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+  .card-package.selfservice {
+    background: #fff3cd;
+    border-color: #d4a017;
+    color: #856404;
+  }
   .card-docs {
     display: flex;
-    gap: 6px;
-    margin-top: 12px;
+    gap: 4px;
+    margin-top: 8px;
     flex-wrap: wrap;
   }
   .doc-chip {
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    background: var(--cream);
-    color: var(--text-muted);
-    border: 1px solid var(--border);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    background: #f0f4f8;
+    color: #4a5568;
+  }
+  .card-flags {
+    margin-top: 6px;
+    font-size: 10px;
+    color: var(--danger);
+    font-weight: 600;
+  }
+  .card-click-hint {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    font-size: 14px;
+    color: var(--border);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .client-card:hover .card-click-hint { opacity: 1; }
+
+  /* Ghost placeholder while dragging */
+  .drop-placeholder {
+    border: 2px dashed var(--gold-light);
+    border-radius: 10px;
+    margin-bottom: 8px;
+    background: rgba(201, 168, 76, 0.06);
+    transition: height 0.15s;
   }
 
   /* Detail panel (slide-in) */
@@ -239,7 +278,7 @@
     top: 0;
     right: 0;
     bottom: 0;
-    width: 560px;
+    width: 520px;
     max-width: 100vw;
     background: var(--white);
     box-shadow: -4px 0 24px rgba(0,0,0,0.12);
@@ -256,6 +295,9 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 1;
   }
   .detail-header-name {
     font-family: 'Playfair Display', serif;
@@ -269,7 +311,7 @@
     color: rgba(255,255,255,0.6);
     font-size: 24px;
     cursor: pointer;
-    padding: 4px;
+    padding: 4px 8px;
   }
   .detail-close:hover { color: var(--white); }
 
@@ -291,13 +333,13 @@
   .detail-row {
     display: flex;
     justify-content: space-between;
-    padding: 6px 0;
+    padding: 5px 0;
     font-size: 14px;
   }
   .detail-label { color: var(--text-muted); }
-  .detail-value { color: var(--text); font-weight: 500; text-align: right; max-width: 60%; }
+  .detail-value { color: var(--text); font-weight: 500; text-align: right; max-width: 60%; word-break: break-word; }
 
-  /* Status dropdown */
+  /* Status dropdown in detail */
   .status-select {
     padding: 6px 12px;
     border: 1px solid var(--border);
@@ -369,23 +411,10 @@
     border-color: var(--gold);
   }
 
-  /* Empty state */
-  .empty-state {
-    text-align: center;
-    padding: 60px 20px;
-    color: var(--text-muted);
-  }
-  .empty-state-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.4; }
-  .empty-state-title { font-size: 18px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
-  .empty-state-text { font-size: 14px; line-height: 1.6; }
-
   /* Responsive */
-  @media (max-width: 640px) {
-    .cards-grid { grid-template-columns: 1fr; }
-    .stats-bar { flex-wrap: wrap; gap: 16px; }
-    .filters { flex-wrap: wrap; }
-    .filter-search { width: 100%; margin-left: 0; }
-    .detail-panel { width: 100vw; }
+  @media (max-width: 900px) {
+    .board { padding: 12px; gap: 10px; }
+    .column { min-width: 240px; }
   }
 </style>
 </head>
@@ -398,46 +427,55 @@
     <div class="header-title">Attorney Dashboard</div>
   </div>
   <div class="header-right">
+    <input type="text" class="header-search" id="searchInput" placeholder="Search clients..." oninput="renderBoard()">
     <a href="/" class="header-link">Client Intake</a>
   </div>
 </div>
 
-<div class="stats-bar">
-  <div class="stat-item">
-    <div class="stat-label">Total Clients</div>
-    <div class="stat-value" id="statTotal">0</div>
-  </div>
-  <div class="stat-item">
-    <div class="stat-label">New</div>
-    <div class="stat-value gold" id="statNew">0</div>
-  </div>
-  <div class="stat-item">
-    <div class="stat-label">Reviewed</div>
-    <div class="stat-value" id="statReviewed">0</div>
-  </div>
-  <div class="stat-item">
-    <div class="stat-label">Signed</div>
-    <div class="stat-value" id="statSigned">0</div>
-  </div>
-  <div class="stat-item">
-    <div class="stat-label">Complete</div>
-    <div class="stat-value" id="statComplete">0</div>
-  </div>
-</div>
-
-<div class="container">
-
-  <div class="filters">
-    <button class="filter-btn active" data-filter="all" onclick="setFilter('all', this)">All</button>
-    <button class="filter-btn" data-filter="new" onclick="setFilter('new', this)">New</button>
-    <button class="filter-btn" data-filter="reviewed" onclick="setFilter('reviewed', this)">Reviewed</button>
-    <button class="filter-btn" data-filter="signed" onclick="setFilter('signed', this)">Signed</button>
-    <button class="filter-btn" data-filter="complete" onclick="setFilter('complete', this)">Complete</button>
-    <input type="text" class="filter-search" id="searchInput" placeholder="Search clients..." oninput="renderCards()">
+<div class="board" id="board">
+  <div class="column column-new" data-status="new">
+    <div class="column-header">
+      <div class="column-header-left">
+        <div class="column-dot"></div>
+        <div class="column-title">New</div>
+      </div>
+      <div class="column-count" id="countNew">0</div>
+    </div>
+    <div class="column-body" id="colNew"></div>
   </div>
 
-  <div class="cards-grid" id="cardsGrid"></div>
+  <div class="column column-reviewed" data-status="reviewed">
+    <div class="column-header">
+      <div class="column-header-left">
+        <div class="column-dot"></div>
+        <div class="column-title">Reviewed</div>
+      </div>
+      <div class="column-count" id="countReviewed">0</div>
+    </div>
+    <div class="column-body" id="colReviewed"></div>
+  </div>
 
+  <div class="column column-signed" data-status="signed">
+    <div class="column-header">
+      <div class="column-header-left">
+        <div class="column-dot"></div>
+        <div class="column-title">Signed</div>
+      </div>
+      <div class="column-count" id="countSigned">0</div>
+    </div>
+    <div class="column-body" id="colSigned"></div>
+  </div>
+
+  <div class="column column-complete" data-status="complete">
+    <div class="column-header">
+      <div class="column-header-left">
+        <div class="column-dot"></div>
+        <div class="column-title">Complete</div>
+      </div>
+      <div class="column-count" id="countComplete">0</div>
+    </div>
+    <div class="column-body" id="colComplete"></div>
+  </div>
 </div>
 
 <!-- Detail panel overlay -->
@@ -453,84 +491,19 @@
 
 <script>
 let intakes = [];
-let currentFilter = 'all';
-let currentDetailId = null;
+let draggedId = null;
+let draggedEl = null;
+let placeholder = null;
 
+// ── Load data ──────────────────────────────────────────────────────────────
 async function loadIntakes() {
   try {
     const res = await fetch('/api/intakes');
     intakes = await res.json();
-    updateStats();
-    renderCards();
+    renderBoard();
   } catch (err) {
     console.error('Failed to load intakes:', err);
   }
-}
-
-function updateStats() {
-  document.getElementById('statTotal').textContent = intakes.length;
-  document.getElementById('statNew').textContent = intakes.filter(i => i.status === 'new').length;
-  document.getElementById('statReviewed').textContent = intakes.filter(i => i.status === 'reviewed').length;
-  document.getElementById('statSigned').textContent = intakes.filter(i => i.status === 'signed').length;
-  document.getElementById('statComplete').textContent = intakes.filter(i => i.status === 'complete').length;
-}
-
-function setFilter(filter, btn) {
-  currentFilter = filter;
-  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  renderCards();
-}
-
-function renderCards() {
-  const grid = document.getElementById('cardsGrid');
-  const search = document.getElementById('searchInput').value.toLowerCase();
-
-  let filtered = intakes;
-  if (currentFilter !== 'all') {
-    filtered = filtered.filter(i => i.status === currentFilter);
-  }
-  if (search) {
-    filtered = filtered.filter(i =>
-      i.client_name.toLowerCase().includes(search) ||
-      (i.client_email || '').toLowerCase().includes(search) ||
-      (i.package_type || '').toLowerCase().includes(search)
-    );
-  }
-
-  if (filtered.length === 0) {
-    grid.innerHTML = `
-      <div class="empty-state" style="grid-column: 1 / -1;">
-        <div class="empty-state-icon">&#128203;</div>
-        <div class="empty-state-title">${intakes.length === 0 ? 'No intakes yet' : 'No matching clients'}</div>
-        <div class="empty-state-text">${intakes.length === 0 ? 'Client intakes will appear here as they come in.' : 'Try adjusting your search or filter.'}</div>
-      </div>`;
-    return;
-  }
-
-  grid.innerHTML = filtered.map(intake => {
-    const date = new Date(intake.created_at + 'Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    const docs = (Array.isArray(intake.documents) ? intake.documents : []).map(d => `<span class="doc-chip">${d}</span>`).join('');
-    const isSelfService = intake.trust_type === 'selfservice';
-
-    return `
-      <div class="client-card" onclick="openDetail(${intake.id})">
-        <div class="card-top">
-          <div>
-            <div class="card-name">${escape(intake.client_name)}</div>
-            <div class="card-email">${escape(intake.client_email || 'No email')}</div>
-          </div>
-          <span class="status-badge status-${intake.status}">${intake.status}</span>
-        </div>
-        <div class="card-details">
-          <div class="card-detail"><strong>Package:</strong> ${escape(intake.package_type)}</div>
-          <div class="card-detail"><strong>Date:</strong> ${date}</div>
-          ${intake.client_phone ? `<div class="card-detail"><strong>Phone:</strong> ${escape(intake.client_phone)}</div>` : ''}
-        </div>
-        ${docs ? `<div class="card-docs">${docs}</div>` : ''}
-        ${isSelfService ? '<div style="margin-top:8px;font-size:11px;color:#856404;">Self-Service — Not attorney-reviewed</div>' : ''}
-      </div>`;
-  }).join('');
 }
 
 function escape(str) {
@@ -540,7 +513,146 @@ function escape(str) {
   return div.innerHTML;
 }
 
+// ── Render Kanban ──────────────────────────────────────────────────────────
+function renderBoard() {
+  const search = (document.getElementById('searchInput').value || '').toLowerCase();
+
+  const filtered = search
+    ? intakes.filter(i => i.client_name.toLowerCase().includes(search) || (i.client_email || '').toLowerCase().includes(search))
+    : intakes;
+
+  const buckets = { new: [], reviewed: [], signed: [], complete: [] };
+  filtered.forEach(i => {
+    if (buckets[i.status]) buckets[i.status].push(i);
+  });
+
+  renderColumn('colNew', buckets.new, 'countNew');
+  renderColumn('colReviewed', buckets.reviewed, 'countReviewed');
+  renderColumn('colSigned', buckets.signed, 'countSigned');
+  renderColumn('colComplete', buckets.complete, 'countComplete');
+}
+
+function renderColumn(colId, items, countId) {
+  const col = document.getElementById(colId);
+  document.getElementById(countId).textContent = items.length;
+
+  if (items.length === 0) {
+    col.innerHTML = '<div style="text-align:center;padding:24px 12px;color:var(--text-light);font-size:13px;">No clients</div>';
+    return;
+  }
+
+  col.innerHTML = items.map(intake => {
+    const date = new Date(intake.created_at + 'Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const docs = (Array.isArray(intake.documents) ? intake.documents : []).map(d => `<span class="doc-chip">${d}</span>`).join('');
+    const isSS = intake.trust_type === 'selfservice';
+    const pkgLabel = intake.package_type.replace('Complete Estate Plan — ', '').replace('Attorney-Directed Documents', 'Attorney-Directed');
+    const hasFlags = intake.intake_data_preview && intake.intake_data_preview.includes('Attorney_Flags');
+
+    return `
+      <div class="client-card" draggable="true" data-id="${intake.id}"
+           ondragstart="onDragStart(event, ${intake.id})"
+           ondragend="onDragEnd(event)"
+           onclick="openDetail(${intake.id})">
+        <span class="card-click-hint">&#8250;</span>
+        <div class="card-name">${escape(intake.client_name)}</div>
+        <div class="card-email">${escape(intake.client_email || '')}</div>
+        <div class="card-meta">
+          <span class="card-package ${isSS ? 'selfservice' : ''}">${escape(pkgLabel)}</span>
+          <span>${date}</span>
+        </div>
+        ${docs ? `<div class="card-docs">${docs}</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+// ── Drag & Drop ────────────────────────────────────────────────────────────
+function onDragStart(e, id) {
+  draggedId = id;
+  draggedEl = e.target.closest('.client-card');
+  draggedEl.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', id);
+
+  // Create placeholder
+  placeholder = document.createElement('div');
+  placeholder.className = 'drop-placeholder';
+  placeholder.style.height = draggedEl.offsetHeight + 'px';
+}
+
+function onDragEnd(e) {
+  if (draggedEl) draggedEl.classList.remove('dragging');
+  draggedEl = null;
+  draggedId = null;
+  if (placeholder && placeholder.parentNode) placeholder.parentNode.removeChild(placeholder);
+  placeholder = null;
+  // Remove all drag-over highlights
+  document.querySelectorAll('.column-body').forEach(col => col.classList.remove('drag-over'));
+}
+
+// Set up column drop zones
+document.querySelectorAll('.column-body').forEach(col => {
+  col.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    col.classList.add('drag-over');
+
+    // Position the placeholder
+    const cards = [...col.querySelectorAll('.client-card:not(.dragging)')];
+    const afterCard = cards.find(card => {
+      const rect = card.getBoundingClientRect();
+      return e.clientY < rect.top + rect.height / 2;
+    });
+
+    if (placeholder) {
+      if (afterCard) {
+        col.insertBefore(placeholder, afterCard);
+      } else {
+        col.appendChild(placeholder);
+      }
+    }
+  });
+
+  col.addEventListener('dragleave', (e) => {
+    // Only remove if leaving the column entirely
+    if (!col.contains(e.relatedTarget)) {
+      col.classList.remove('drag-over');
+      if (placeholder && placeholder.parentNode === col) col.removeChild(placeholder);
+    }
+  });
+
+  col.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    col.classList.remove('drag-over');
+    if (placeholder && placeholder.parentNode) placeholder.parentNode.removeChild(placeholder);
+
+    const id = parseInt(e.dataTransfer.getData('text/plain'));
+    const newStatus = col.closest('.column').dataset.status;
+
+    // Update locally
+    const intake = intakes.find(i => i.id === id);
+    if (intake && intake.status !== newStatus) {
+      intake.status = newStatus;
+      renderBoard();
+      // Persist to server
+      try {
+        await fetch(`/api/intakes/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus })
+        });
+      } catch (err) {
+        console.error('Failed to update status:', err);
+      }
+    }
+  });
+});
+
+// ── Detail panel ───────────────────────────────────────────────────────────
+let currentDetailId = null;
+
 async function openDetail(id) {
+  // Don't open if we just finished dragging
+  if (draggedId) return;
   currentDetailId = id;
   try {
     const res = await fetch(`/api/intakes/${id}`);
@@ -553,9 +665,7 @@ async function openDetail(id) {
 }
 
 function closeDetail(event) {
-  if (event.target === document.getElementById('detailOverlay')) {
-    closeDetailPanel();
-  }
+  if (event.target === document.getElementById('detailOverlay')) closeDetailPanel();
 }
 
 function closeDetailPanel() {
@@ -570,7 +680,7 @@ function renderDetail(intake) {
 
   document.getElementById('detailName').textContent = intake.client_name;
 
-  // Build document download buttons
+  // Document download buttons
   const docButtons = [];
   const docs = Array.isArray(intake.documents) ? intake.documents : [];
   if (docs.includes('Joint Trust') || intake.trust_type === 'joint') {
@@ -589,17 +699,19 @@ function renderDetail(intake) {
     docButtons.push(`<a class="doc-download-btn" href="/api/intakes/${intake.id}/download/hcd" target="_blank">&#128196; Healthcare Directive</a>`);
   }
 
-  // Build collected data display
+  // Collected data rows
   const skipKeys = ['Trust_Type', 'needs_dpoa', 'needs_will', 'needs_hcd', 'client_email', 'Attorney_Flags'];
   const dataRows = Object.entries(data)
-    .filter(([k, v]) => !skipKeys.includes(k) && v && v !== 'N/A' && v !== '' && v !== 'false')
+    .filter(([k, v]) => !skipKeys.includes(k) && v && v !== 'N/A' && v !== '' && v !== 'false' && v !== false)
     .map(([k, v]) => {
       const label = k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-      const val = typeof v === 'string' && v.length > 100 ? v.substring(0, 100) + '...' : v;
+      const val = typeof v === 'string' && v.length > 120 ? v.substring(0, 120) + '...' : v;
       return `<div class="detail-row"><span class="detail-label">${escape(label)}</span><span class="detail-value">${escape(String(val))}</span></div>`;
     }).join('');
 
-  const flags = data.Attorney_Flags ? data.Attorney_Flags.split(' | ').map(f => `<div style="padding:4px 0;font-size:13px;color:#991b1b;">&#9873; ${escape(f)}</div>`).join('') : '<div style="font-size:13px;color:var(--text-muted);">None</div>';
+  const flags = data.Attorney_Flags
+    ? data.Attorney_Flags.split(' | ').map(f => `<div style="padding:4px 0;font-size:13px;color:#991b1b;">&#9873; ${escape(f)}</div>`).join('')
+    : '';
 
   document.getElementById('detailBody').innerHTML = `
     ${isSelfService ? '<div style="background:#fff3cd;border:1px solid #d4a017;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#664d03;font-weight:600;">Self-Service — No attorney-client relationship. Documents not attorney-reviewed.</div>' : ''}
@@ -623,11 +735,7 @@ function renderDetail(intake) {
       <div class="detail-row"><span class="detail-label">Submitted</span><span class="detail-value">${date}</span></div>
     </div>
 
-    ${data.Attorney_Flags ? `
-    <div class="detail-section">
-      <div class="detail-section-title">Attorney Flags</div>
-      ${flags}
-    </div>` : ''}
+    ${flags ? `<div class="detail-section"><div class="detail-section-title">Attorney Flags</div>${flags}</div>` : ''}
 
     <div class="detail-section">
       <div class="detail-section-title">Documents</div>
@@ -657,11 +765,9 @@ async function updateStatus(id, status) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status })
     });
-    // Update local data
     const intake = intakes.find(i => i.id === id);
     if (intake) intake.status = status;
-    updateStats();
-    renderCards();
+    renderBoard();
   } catch (err) {
     console.error('Failed to update status:', err);
   }
@@ -683,7 +789,7 @@ async function saveNotes(id) {
   }
 }
 
-// Keyboard shortcut: Escape closes detail panel
+// Escape to close detail
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && currentDetailId) closeDetailPanel();
 });
