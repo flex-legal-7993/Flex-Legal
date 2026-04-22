@@ -1873,7 +1873,7 @@ async function generateAndEmailSelfService(data) {
   }
 
   if (data.needs_dpoa) {
-    const buf = renderTemplate('dpoa_standalone.docx');
+    const buf = renderTemplate('dpoa_selfservice.docx');
     if (buf) attachments.push({ filename: `${lastName.replace(/\s+/g,'_')}_DPOA_${dateStr}.docx`, content: buf, contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
   }
   if (data.needs_will) {
@@ -1881,7 +1881,7 @@ async function generateAndEmailSelfService(data) {
     if (buf) attachments.push({ filename: `${lastName.replace(/\s+/g,'_')}_Will_${dateStr}.docx`, content: buf, contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
   }
   if (data.needs_hcd) {
-    const buf = renderTemplate('hcd_standalone.docx');
+    const buf = renderTemplate('hcd_selfservice.docx');
     if (buf) attachments.push({ filename: `${lastName.replace(/\s+/g,'_')}_HCD_${dateStr}.docx`, content: buf, contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
   }
 
@@ -2010,12 +2010,18 @@ app.get('/api/intakes/:id/download/:docType', (req, res) => {
   let templateFile, docLabel;
   if (docType === 'joint_trust') { templateFile = 'joint_trust.docx'; docLabel = 'Joint_Trust'; }
   else if (docType === 'single_trust') { templateFile = 'single_trust.docx'; docLabel = 'Single_Trust'; }
-  else if (docType === 'dpoa') { templateFile = 'dpoa_standalone.docx'; docLabel = 'DPOA'; }
+  else if (docType === 'dpoa') {
+    templateFile = row.trust_type === 'selfservice' ? 'dpoa_selfservice.docx' : 'dpoa_standalone.docx';
+    docLabel = 'DPOA';
+  }
   else if (docType === 'will') {
     templateFile = row.trust_type === 'selfservice' ? 'will_selfservice.docx' : 'will_standalone.docx';
     docLabel = 'Will';
   }
-  else if (docType === 'hcd') { templateFile = 'hcd_standalone.docx'; docLabel = 'HCD'; }
+  else if (docType === 'hcd') {
+    templateFile = row.trust_type === 'selfservice' ? 'hcd_selfservice.docx' : 'hcd_standalone.docx';
+    docLabel = 'HCD';
+  }
   else { return res.status(400).json({ error: 'Unknown document type' }); }
 
   const templatePath = path.join(__dirname, 'templates', templateFile);
