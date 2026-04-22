@@ -10,6 +10,7 @@ const PizZip    = require('pizzip');
 const Docxtemplater = require('docxtemplater');
 const fs        = require('fs');
 const path      = require('path');
+const initSqlJs = require('sql.js');
 
 const app = express();
 app.use(cors());
@@ -22,6 +23,84 @@ const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
 const NOTIFY_EMAIL       = process.env.NOTIFY_EMAIL;
 
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DATABASE — SQLite via sql.js
+// ─────────────────────────────────────────────────────────────────────────────
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'intakes.db');
+let db = null;
+
+async function initDatabase() {
+  const SQL = await initSqlJs();
+  const dbDir = path.dirname(DB_PATH);
+  if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
+
+  // Load existing DB or create new
+  if (fs.existsSync(DB_PATH)) {
+    const fileBuffer = fs.readFileSync(DB_PATH);
+    db = new SQL.Database(fileBuffer);
+  } else {
+    db = new SQL.Database();
+  }
+
+  db.run(`CREATE TABLE IF NOT EXISTS intakes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_name TEXT NOT NULL,
+    client_email TEXT,
+    client_phone TEXT,
+    package_type TEXT NOT NULL,
+    trust_type TEXT NOT NULL,
+    intake_data TEXT NOT NULL,
+    documents TEXT DEFAULT '[]',
+    status TEXT DEFAULT 'new',
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`);
+  saveDatabase();
+  console.log('Database initialized at', DB_PATH);
+}
+
+function saveDatabase() {
+  if (!db) return;
+  const data = db.export();
+  const buffer = Buffer.from(data);
+  fs.writeFileSync(DB_PATH, buffer);
+}
+
+function saveIntake(intakeData, trustType) {
+  if (!db) { console.error('Database not initialized'); return null; }
+  const clientName = `${intakeData.Your_First_Name || ''} ${intakeData.Your_Last_Name || ''}`.trim() || 'Unknown';
+  const clientEmail = intakeData.client_email || '';
+  const clientPhone = intakeData.Your_Cell_Phone || '';
+
+  const packageMap = {
+    'joint': 'Complete Estate Plan — Married',
+    'single': 'Complete Estate Plan — Single',
+    'standalone': 'Attorney-Directed Documents',
+    'selfservice': 'Self-Service'
+  };
+  const packageType = packageMap[trustType] || trustType;
+
+  // Figure out which documents were selected
+  const docs = [];
+  if (trustType === 'joint') docs.push('Joint Trust');
+  else if (trustType === 'single') docs.push('Single Trust');
+  if (intakeData.needs_dpoa || intakeData.needs_dpoa === 'true') docs.push('Financial POA');
+  if (intakeData.needs_will || intakeData.needs_will === 'true') docs.push('Will');
+  if (intakeData.needs_hcd || intakeData.needs_hcd === 'true') docs.push('Healthcare Directive');
+
+  const stmt = db.prepare(`INSERT INTO intakes (client_name, client_email, client_phone, package_type, trust_type, intake_data, documents)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`);
+  stmt.run([clientName, clientEmail, clientPhone, packageType, trustType, JSON.stringify(intakeData), JSON.stringify(docs)]);
+  stmt.free();
+
+  const result = db.exec('SELECT last_insert_rowid() as id');
+  const id = result[0].values[0][0];
+  saveDatabase();
+  console.log(`Intake saved to database: ID ${id} — ${clientName}`);
+  return id;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SYSTEM PROMPT — MARRIED / JOINT TRUST
@@ -964,6 +1043,8 @@ app.post('/chat', async (req, res) => {
         console.error('JSON preview:', jsonStr.substring(0, 200));
         return res.json({ reply: closingMessage, complete: false });
       }
+      // Save to database
+      saveIntake(intakeData, trustType);
       // Route to correct doc gen function based on trust type
       if (trustType === 'single') {
         generateAndEmailSingle(intakeData).catch(err => console.error('Single doc gen error:', err));
@@ -1016,6 +1097,8 @@ app.post('/chat-stream', async (req, res) => {
         let intakeData;
         try {
           intakeData = JSON.parse(jsonStr);
+          // Save to database
+          saveIntake(intakeData, trustType);
           // Route to correct doc gen function based on trust type
           if (trustType === 'single') {
             generateAndEmailSingle(intakeData).catch(err => console.error('Single doc gen error:', err));
@@ -1755,7 +1838,180 @@ Document sent directly to client.
   console.log(`Attorney notified: ${clientName} — ${docsSelected}`);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DASHBOARD API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// List all intakes
+app.get('/api/intakes', (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not ready' });
+  const result = db.exec('SELECT id, client_name, client_email, client_phone, package_type, trust_type, documents, status, notes, created_at, updated_at FROM intakes ORDER BY created_at DESC');
+  if (!result.length) return res.json([]);
+  const cols = result[0].columns;
+  const rows = result[0].values.map(row => {
+    const obj = {};
+    cols.forEach((col, i) => { obj[col] = row[i]; });
+    obj.documents = JSON.parse(obj.documents || '[]');
+    return obj;
+  });
+  res.json(rows);
+});
+
+// Get single intake with full data
+app.get('/api/intakes/:id', (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not ready' });
+  const stmt = db.prepare('SELECT * FROM intakes WHERE id = ?');
+  stmt.bind([parseInt(req.params.id)]);
+  if (!stmt.step()) { stmt.free(); return res.status(404).json({ error: 'Not found' }); }
+  const row = stmt.getAsObject();
+  stmt.free();
+  row.intake_data = JSON.parse(row.intake_data || '{}');
+  row.documents = JSON.parse(row.documents || '[]');
+  res.json(row);
+});
+
+// Update intake (status, notes)
+app.patch('/api/intakes/:id', (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not ready' });
+  const { status, notes } = req.body;
+  const id = parseInt(req.params.id);
+  if (status) {
+    db.run('UPDATE intakes SET status = ?, updated_at = datetime(\'now\') WHERE id = ?', [status, id]);
+  }
+  if (notes !== undefined) {
+    db.run('UPDATE intakes SET notes = ?, updated_at = datetime(\'now\') WHERE id = ?', [notes, id]);
+  }
+  saveDatabase();
+  res.json({ success: true });
+});
+
+// Re-generate and download a document
+app.get('/api/intakes/:id/download/:docType', (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not ready' });
+  const stmt = db.prepare('SELECT * FROM intakes WHERE id = ?');
+  stmt.bind([parseInt(req.params.id)]);
+  if (!stmt.step()) { stmt.free(); return res.status(404).json({ error: 'Not found' }); }
+  const row = stmt.getAsObject();
+  stmt.free();
+  const data = JSON.parse(row.intake_data || '{}');
+  const lastName = data.Your_Last_Name || 'Client';
+  const dateStr = new Date(row.created_at).toISOString().slice(0, 10);
+  const docType = req.params.docType;
+
+  let templateFile, docLabel;
+  if (docType === 'joint_trust') { templateFile = 'joint_trust.docx'; docLabel = 'Joint_Trust'; }
+  else if (docType === 'single_trust') { templateFile = 'single_trust.docx'; docLabel = 'Single_Trust'; }
+  else if (docType === 'dpoa') { templateFile = 'dpoa_standalone.docx'; docLabel = 'DPOA'; }
+  else if (docType === 'will') {
+    templateFile = row.trust_type === 'selfservice' ? 'will_selfservice.docx' : 'will_standalone.docx';
+    docLabel = 'Will';
+  }
+  else if (docType === 'hcd') { templateFile = 'hcd_standalone.docx'; docLabel = 'HCD'; }
+  else { return res.status(400).json({ error: 'Unknown document type' }); }
+
+  const templatePath = path.join(__dirname, 'templates', templateFile);
+  if (!fs.existsSync(templatePath)) return res.status(404).json({ error: 'Template not found' });
+
+  try {
+    const content = fs.readFileSync(templatePath, 'binary');
+    const zip = new PizZip(content);
+
+    // Build merge data based on trust type (reuse the same logic as generation)
+    let mergeData = {};
+    if (row.trust_type === 'selfservice') {
+      // Rebuild conditional fields
+      const hasChildren = data.has_children === true || data.has_children === 'true';
+      const hasMinorChildren = data.has_minor_children === true || data.has_minor_children === 'true';
+      const beneficiaryNames = data.Beneficiary_Names || data.Full_Legal_Names_of_Children || '';
+      const firstPR = data.First_Choice_Personal_Rep || data.First_Choice_Successor_Trustee || '';
+      const secondPR = data.Second_Choice_Personal_Rep || data.Second_Choice_Successor_Trustee || '';
+      const firstGuardian = data.First_Choice_Guardian || '';
+      const secondGuardian = data.Second_Choice_Guardian || '';
+      const familyStatement = hasChildren ? 'I have the following children' : 'I have no children. I designate the following as my named beneficiaries';
+      let guardianSection = '';
+      if (hasMinorChildren && firstGuardian) {
+        guardianSection = `C.  If I am survived by a minor or incapacitated child, I appoint the following to act in the priority and sequence named, as Guardian of the person and estate of any such child:\n\n    1.  ${firstGuardian}; and then\n\n    2.  ${secondGuardian || '___________'}; and then\n\n    3.  Whomsoever a majority of my surviving, competent descendants shall appoint in writing with voting rights allocated among them upon the principle of representation.\n\nD.  Based on my best judgment, these people as guardians will serve the best interests of my children. If the appointed Guardian is unable, unwilling, or ceases to act, the next named nominee shall act instead. The appointment of the Guardian named above shall be effective upon the filing of the petition and affidavit of acceptance as provided in Section 75-5-202.5 U.C.A. (1953, as amended).`;
+      }
+      const bondLabel = hasMinorChildren && firstGuardian ? 'E.' : 'C.';
+      const bondGuardianClause = hasMinorChildren && firstGuardian ? ' or by my Guardian' : '';
+      const recipientTerm = hasChildren ? 'children' : 'beneficiaries';
+      const personalPropertyDistribution = `Otherwise, I give all my household furniture and furnishings, jewelry, clothing, china, silverware, books, pictures, personal automobiles, and all other tangible articles of household or personal use or adornment, or my interest in such property, together with any insurance on the property, to my ${recipientTerm} who survive me, to be divided among them in equal shares as they shall agree (taking into consideration all specific gifts to any of my ${recipientTerm} pursuant to the Memorandum mentioned above). If my ${recipientTerm} are unable to agree upon a division within sixty (60) days of my death, my Personal Representative shall divide such property (including such specific gifts) among my ${recipientTerm} in substantially equal shares, as my Personal Representative in his or her discretion deems practical, having due regard to the personal preferences of my ${recipientTerm}, and without being required to achieve exact equality in monetary value. My ${recipientTerm} shall have the use and possession of the property described in this paragraph during the period of administration of my estate without necessity for bond.`;
+      const residuaryDistribution = hasChildren
+        ? `I give my Residuary Estate to my children who survive me, in equal shares. If any child of mine predeceases me but leaves descendants who survive me, such deceased child\u2019s share shall be distributed to those descendants by right of representation. If none of my children or their descendants survive me, I give my Residuary Estate to my heirs at law as determined under the laws of the State of Utah then in effect.`
+        : `I give my Residuary Estate to my named beneficiaries who survive me, in equal shares. If any named beneficiary predeceases me, that beneficiary\u2019s share shall be distributed equally among the remaining surviving beneficiaries. If none of my named beneficiaries survive me, I give my Residuary Estate to my heirs at law as determined under the laws of the State of Utah then in effect.`;
+
+      mergeData = {
+        Your_First_Name: data.Your_First_Name || '', Your_Last_Name: data.Your_Last_Name || '',
+        Your_Birth_Date: data.Your_Birth_Date || '',
+        Your_Preferred_Signature_Name: data.Your_Preferred_Signature_Name || `${data.Your_First_Name || ''} ${data.Your_Last_Name || ''}`.trim(),
+        Your_Cell_Phone: data.Your_Cell_Phone || '', Your_Work_Phone_Number: 'N/A',
+        Address: data.Address || '', City: data.City || '', State: 'Utah',
+        Zip_Code: data.Zip_Code || '', County: data.County || '',
+        Family_Statement: familyStatement, Beneficiary_Names: beneficiaryNames,
+        First_Choice_Personal_Rep: firstPR, Second_Choice_Personal_Rep: secondPR,
+        First_Choice_Guardian: firstGuardian, Second_Choice_Guardian: secondGuardian,
+        Guardian_Section: guardianSection, Bond_Label: bondLabel, Bond_Guardian_Clause: bondGuardianClause,
+        Personal_Property_Distribution: personalPropertyDistribution, Residuary_Distribution: residuaryDistribution,
+        First_Choice_Successor_Trustee: firstPR, Second_Choice_Successor_Trustee: secondPR,
+        Guardian_Name: firstGuardian, Full_Legal_Names_of_Children: beneficiaryNames || 'None',
+        DPOA_Agent_Name: data.DPOA_Agent_Name || '', Agent_Address: data.Agent_Address || '',
+        Agent_City: data.Agent_City || '', Agent_State: data.Agent_State || '', Agent_Zip: data.Agent_Zip || '',
+        Agent_Name: data.Agent_Name || '', Agent_Cell_Phone: data.Agent_Cell_Phone || '', Agent_Work_Phone_Number: 'N/A',
+        Alternate_Agent_Name: data.Alternate_Agent_Name || '', Alternate_Agent_Address: data.Alternate_Agent_Address || '',
+        Alternate_Agent_City: data.Alternate_Agent_City || '', Alternate_Agent_State: data.Alternate_Agent_State || '',
+        Alternate_Agent_Zip: data.Alternate_Agent_Zip || '', Alternate_Agent_Cell_Phone: data.Alternate_Agent_Cell_Phone || '',
+        Alternate_Agent_Work_Phone: 'N/A',
+      };
+    } else {
+      // For all other trust types, pass through all data fields
+      mergeData = { ...data };
+    }
+
+    // Render headers/footers
+    Object.keys(zip.files).forEach(fname => {
+      if ((fname.startsWith('word/footer') || fname.startsWith('word/header')) && fname.endsWith('.xml')) {
+        try {
+          let fc = zip.files[fname].asText();
+          Object.entries(mergeData).forEach(([key, value]) => {
+            fc = fc.replace(new RegExp(`\u00ABr${key}\u00BB`, 'g'), value || '___________');
+            fc = fc.replace(new RegExp(`\u00AB${key}\u00BB`, 'g'), value || '___________');
+          });
+          zip.file(fname, fc);
+        } catch (e) { /* skip binary */ }
+      }
+    });
+
+    const doc = new Docxtemplater(zip, {
+      paragraphLoop: true, linebreaks: true,
+      delimiters: { start: '\u00AB', end: '\u00BB' },
+      nullGetter: () => '___________',
+    });
+    doc.render(mergeData);
+    const buf = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
+    const filename = `${lastName.replace(/\s+/g, '_')}_${docLabel}_${dateStr}.docx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buf);
+  } catch (err) {
+    console.error('Document download error:', err);
+    res.status(500).json({ error: 'Failed to generate document' });
+  }
+});
+
+// Serve dashboard
+app.get('/dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Flex Legal intake server running on port ${PORT}`));
+
+// Initialize database then start server
+initDatabase().then(() => {
+  app.listen(PORT, () => console.log(`Flex Legal intake server running on port ${PORT}`));
+}).catch(err => {
+  console.error('Database init failed:', err);
+  app.listen(PORT, () => console.log(`Flex Legal intake server running on port ${PORT} (no database)`));
+});

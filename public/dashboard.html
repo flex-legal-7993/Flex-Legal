@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attorney Dashboard — Flex Legal Services</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=Source+Sans+3:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0F3D6B;
+    --navy-dark: #082a4d;
+    --navy-light: #1a5490;
+    --gold: #C9A84C;
+    --gold-light: #e8d5a3;
+    --gold-dark: #a8863a;
+    --cream: #FAF8F4;
+    --cream-dark: #F0EDE6;
+    --text: #1a1a1a;
+    --text-muted: #6b6560;
+    --text-light: #9a948e;
+    --border: #ddd8d0;
+    --white: #ffffff;
+    --success: #1a6b4a;
+    --success-bg: #e8f5ee;
+    --warning: #856404;
+    --warning-bg: #fff3cd;
+    --danger: #991b1b;
+    --danger-bg: #fef2f2;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Source Sans 3', sans-serif;
+    background: var(--cream);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* Header */
+  .header {
+    background: var(--navy);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .header-logo {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    color: var(--gold);
+    font-weight: 500;
+  }
+  .header-divider {
+    width: 1px;
+    height: 20px;
+    background: rgba(255,255,255,0.2);
+  }
+  .header-title {
+    font-size: 14px;
+    color: rgba(255,255,255,0.7);
+    font-weight: 400;
+  }
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .header-link {
+    font-size: 13px;
+    color: rgba(255,255,255,0.6);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .header-link:hover { color: var(--gold-light); }
+
+  /* Stats bar */
+  .stats-bar {
+    background: var(--white);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    gap: 32px;
+  }
+  .stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .stat-label {
+    font-size: 11px;
+    color: var(--text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+  }
+  .stat-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--navy);
+  }
+  .stat-value.gold { color: var(--gold-dark); }
+
+  /* Main content */
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+
+  /* Filters */
+  .filters {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .filter-btn {
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--white);
+    font-size: 13px;
+    font-family: 'Source Sans 3', sans-serif;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .filter-btn:hover { border-color: var(--gold); color: var(--text); }
+  .filter-btn.active {
+    background: var(--navy);
+    color: var(--white);
+    border-color: var(--navy);
+  }
+  .filter-search {
+    margin-left: auto;
+    padding: 7px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: 'Source Sans 3', sans-serif;
+    width: 240px;
+    background: var(--white);
+  }
+  .filter-search:focus { outline: none; border-color: var(--gold); }
+
+  /* Client cards */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+  }
+  .client-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+  .client-card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    border-color: var(--gold-light);
+  }
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+  }
+  .card-name {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--navy);
+  }
+  .card-email {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .status-new { background: #dbeafe; color: #1e40af; }
+  .status-reviewed { background: var(--warning-bg); color: var(--warning); }
+  .status-signed { background: var(--success-bg); color: var(--success); }
+  .status-complete { background: #f0fdf4; color: #166534; }
+
+  .card-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    margin-top: 10px;
+  }
+  .card-detail {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .card-detail strong { color: var(--text); font-weight: 600; }
+
+  .card-docs {
+    display: flex;
+    gap: 6px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+  .doc-chip {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    background: var(--cream);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+
+  /* Detail panel (slide-in) */
+  .detail-overlay {
+    display: none;
+    position: fixed;
+    top: 0; right: 0; bottom: 0; left: 0;
+    background: rgba(0,0,0,0.3);
+    z-index: 100;
+  }
+  .detail-overlay.open { display: block; }
+  .detail-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 560px;
+    max-width: 100vw;
+    background: var(--white);
+    box-shadow: -4px 0 24px rgba(0,0,0,0.12);
+    z-index: 101;
+    overflow-y: auto;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+  }
+  .detail-overlay.open .detail-panel { transform: translateX(0); }
+
+  .detail-header {
+    background: var(--navy);
+    padding: 20px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .detail-header-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    color: var(--white);
+    font-weight: 500;
+  }
+  .detail-close {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.6);
+    font-size: 24px;
+    cursor: pointer;
+    padding: 4px;
+  }
+  .detail-close:hover { color: var(--white); }
+
+  .detail-body { padding: 24px; }
+
+  .detail-section {
+    margin-bottom: 24px;
+  }
+  .detail-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 14px;
+  }
+  .detail-label { color: var(--text-muted); }
+  .detail-value { color: var(--text); font-weight: 500; text-align: right; max-width: 60%; }
+
+  /* Status dropdown */
+  .status-select {
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: 'Source Sans 3', sans-serif;
+    background: var(--white);
+    cursor: pointer;
+  }
+  .status-select:focus { outline: none; border-color: var(--gold); }
+
+  /* Notes */
+  .notes-textarea {
+    width: 100%;
+    min-height: 100px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: 'Source Sans 3', sans-serif;
+    line-height: 1.5;
+    resize: vertical;
+  }
+  .notes-textarea:focus { outline: none; border-color: var(--gold); }
+  .notes-save-btn {
+    margin-top: 8px;
+    padding: 8px 20px;
+    background: var(--navy);
+    color: var(--white);
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: 'Source Sans 3', sans-serif;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .notes-save-btn:hover { background: var(--navy-light); }
+  .notes-saved {
+    display: inline-block;
+    margin-left: 10px;
+    font-size: 12px;
+    color: var(--success);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .notes-saved.show { opacity: 1; }
+
+  /* Document download buttons */
+  .doc-download-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: var(--cream);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: 'Source Sans 3', sans-serif;
+    color: var(--navy);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+    margin-right: 8px;
+    margin-bottom: 8px;
+  }
+  .doc-download-btn:hover {
+    background: var(--gold-light);
+    border-color: var(--gold);
+  }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+  }
+  .empty-state-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.4; }
+  .empty-state-title { font-size: 18px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+  .empty-state-text { font-size: 14px; line-height: 1.6; }
+
+  /* Responsive */
+  @media (max-width: 640px) {
+    .cards-grid { grid-template-columns: 1fr; }
+    .stats-bar { flex-wrap: wrap; gap: 16px; }
+    .filters { flex-wrap: wrap; }
+    .filter-search { width: 100%; margin-left: 0; }
+    .detail-panel { width: 100vw; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="header-logo">Flex Legal Services</div>
+    <div class="header-divider"></div>
+    <div class="header-title">Attorney Dashboard</div>
+  </div>
+  <div class="header-right">
+    <a href="/" class="header-link">Client Intake</a>
+  </div>
+</div>
+
+<div class="stats-bar">
+  <div class="stat-item">
+    <div class="stat-label">Total Clients</div>
+    <div class="stat-value" id="statTotal">0</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-label">New</div>
+    <div class="stat-value gold" id="statNew">0</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-label">Reviewed</div>
+    <div class="stat-value" id="statReviewed">0</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-label">Signed</div>
+    <div class="stat-value" id="statSigned">0</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-label">Complete</div>
+    <div class="stat-value" id="statComplete">0</div>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="filters">
+    <button class="filter-btn active" data-filter="all" onclick="setFilter('all', this)">All</button>
+    <button class="filter-btn" data-filter="new" onclick="setFilter('new', this)">New</button>
+    <button class="filter-btn" data-filter="reviewed" onclick="setFilter('reviewed', this)">Reviewed</button>
+    <button class="filter-btn" data-filter="signed" onclick="setFilter('signed', this)">Signed</button>
+    <button class="filter-btn" data-filter="complete" onclick="setFilter('complete', this)">Complete</button>
+    <input type="text" class="filter-search" id="searchInput" placeholder="Search clients..." oninput="renderCards()">
+  </div>
+
+  <div class="cards-grid" id="cardsGrid"></div>
+
+</div>
+
+<!-- Detail panel overlay -->
+<div class="detail-overlay" id="detailOverlay" onclick="closeDetail(event)">
+  <div class="detail-panel" id="detailPanel">
+    <div class="detail-header">
+      <div class="detail-header-name" id="detailName"></div>
+      <button class="detail-close" onclick="closeDetailPanel()">&times;</button>
+    </div>
+    <div class="detail-body" id="detailBody"></div>
+  </div>
+</div>
+
+<script>
+let intakes = [];
+let currentFilter = 'all';
+let currentDetailId = null;
+
+async function loadIntakes() {
+  try {
+    const res = await fetch('/api/intakes');
+    intakes = await res.json();
+    updateStats();
+    renderCards();
+  } catch (err) {
+    console.error('Failed to load intakes:', err);
+  }
+}
+
+function updateStats() {
+  document.getElementById('statTotal').textContent = intakes.length;
+  document.getElementById('statNew').textContent = intakes.filter(i => i.status === 'new').length;
+  document.getElementById('statReviewed').textContent = intakes.filter(i => i.status === 'reviewed').length;
+  document.getElementById('statSigned').textContent = intakes.filter(i => i.status === 'signed').length;
+  document.getElementById('statComplete').textContent = intakes.filter(i => i.status === 'complete').length;
+}
+
+function setFilter(filter, btn) {
+  currentFilter = filter;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderCards();
+}
+
+function renderCards() {
+  const grid = document.getElementById('cardsGrid');
+  const search = document.getElementById('searchInput').value.toLowerCase();
+
+  let filtered = intakes;
+  if (currentFilter !== 'all') {
+    filtered = filtered.filter(i => i.status === currentFilter);
+  }
+  if (search) {
+    filtered = filtered.filter(i =>
+      i.client_name.toLowerCase().includes(search) ||
+      (i.client_email || '').toLowerCase().includes(search) ||
+      (i.package_type || '').toLowerCase().includes(search)
+    );
+  }
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `
+      <div class="empty-state" style="grid-column: 1 / -1;">
+        <div class="empty-state-icon">&#128203;</div>
+        <div class="empty-state-title">${intakes.length === 0 ? 'No intakes yet' : 'No matching clients'}</div>
+        <div class="empty-state-text">${intakes.length === 0 ? 'Client intakes will appear here as they come in.' : 'Try adjusting your search or filter.'}</div>
+      </div>`;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(intake => {
+    const date = new Date(intake.created_at + 'Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const docs = (Array.isArray(intake.documents) ? intake.documents : []).map(d => `<span class="doc-chip">${d}</span>`).join('');
+    const isSelfService = intake.trust_type === 'selfservice';
+
+    return `
+      <div class="client-card" onclick="openDetail(${intake.id})">
+        <div class="card-top">
+          <div>
+            <div class="card-name">${escape(intake.client_name)}</div>
+            <div class="card-email">${escape(intake.client_email || 'No email')}</div>
+          </div>
+          <span class="status-badge status-${intake.status}">${intake.status}</span>
+        </div>
+        <div class="card-details">
+          <div class="card-detail"><strong>Package:</strong> ${escape(intake.package_type)}</div>
+          <div class="card-detail"><strong>Date:</strong> ${date}</div>
+          ${intake.client_phone ? `<div class="card-detail"><strong>Phone:</strong> ${escape(intake.client_phone)}</div>` : ''}
+        </div>
+        ${docs ? `<div class="card-docs">${docs}</div>` : ''}
+        ${isSelfService ? '<div style="margin-top:8px;font-size:11px;color:#856404;">Self-Service — Not attorney-reviewed</div>' : ''}
+      </div>`;
+  }).join('');
+}
+
+function escape(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+async function openDetail(id) {
+  currentDetailId = id;
+  try {
+    const res = await fetch(`/api/intakes/${id}`);
+    const intake = await res.json();
+    renderDetail(intake);
+    document.getElementById('detailOverlay').classList.add('open');
+  } catch (err) {
+    console.error('Failed to load intake:', err);
+  }
+}
+
+function closeDetail(event) {
+  if (event.target === document.getElementById('detailOverlay')) {
+    closeDetailPanel();
+  }
+}
+
+function closeDetailPanel() {
+  document.getElementById('detailOverlay').classList.remove('open');
+  currentDetailId = null;
+}
+
+function renderDetail(intake) {
+  const data = intake.intake_data || {};
+  const date = new Date(intake.created_at + 'Z').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const isSelfService = intake.trust_type === 'selfservice';
+
+  document.getElementById('detailName').textContent = intake.client_name;
+
+  // Build document download buttons
+  const docButtons = [];
+  const docs = Array.isArray(intake.documents) ? intake.documents : [];
+  if (docs.includes('Joint Trust') || intake.trust_type === 'joint') {
+    docButtons.push(`<a class="doc-download-btn" href="/api/intakes/${intake.id}/download/joint_trust" target="_blank">&#128196; Joint Trust</a>`);
+  }
+  if (docs.includes('Single Trust') || intake.trust_type === 'single') {
+    docButtons.push(`<a class="doc-download-btn" href="/api/intakes/${intake.id}/download/single_trust" target="_blank">&#128196; Single Trust</a>`);
+  }
+  if (docs.includes('Financial POA')) {
+    docButtons.push(`<a class="doc-download-btn" href="/api/intakes/${intake.id}/download/dpoa" target="_blank">&#128196; Financial POA</a>`);
+  }
+  if (docs.includes('Will')) {
+    docButtons.push(`<a class="doc-download-btn" href="/api/intakes/${intake.id}/download/will" target="_blank">&#128196; Will</a>`);
+  }
+  if (docs.includes('Healthcare Directive')) {
+    docButtons.push(`<a class="doc-download-btn" href="/api/intakes/${intake.id}/download/hcd" target="_blank">&#128196; Healthcare Directive</a>`);
+  }
+
+  // Build collected data display
+  const skipKeys = ['Trust_Type', 'needs_dpoa', 'needs_will', 'needs_hcd', 'client_email', 'Attorney_Flags'];
+  const dataRows = Object.entries(data)
+    .filter(([k, v]) => !skipKeys.includes(k) && v && v !== 'N/A' && v !== '' && v !== 'false')
+    .map(([k, v]) => {
+      const label = k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      const val = typeof v === 'string' && v.length > 100 ? v.substring(0, 100) + '...' : v;
+      return `<div class="detail-row"><span class="detail-label">${escape(label)}</span><span class="detail-value">${escape(String(val))}</span></div>`;
+    }).join('');
+
+  const flags = data.Attorney_Flags ? data.Attorney_Flags.split(' | ').map(f => `<div style="padding:4px 0;font-size:13px;color:#991b1b;">&#9873; ${escape(f)}</div>`).join('') : '<div style="font-size:13px;color:var(--text-muted);">None</div>';
+
+  document.getElementById('detailBody').innerHTML = `
+    ${isSelfService ? '<div style="background:#fff3cd;border:1px solid #d4a017;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#664d03;font-weight:600;">Self-Service — No attorney-client relationship. Documents not attorney-reviewed.</div>' : ''}
+
+    <div class="detail-section">
+      <div class="detail-section-title">Status</div>
+      <select class="status-select" id="statusSelect" onchange="updateStatus(${intake.id}, this.value)">
+        <option value="new" ${intake.status === 'new' ? 'selected' : ''}>New</option>
+        <option value="reviewed" ${intake.status === 'reviewed' ? 'selected' : ''}>Reviewed</option>
+        <option value="signed" ${intake.status === 'signed' ? 'selected' : ''}>Signed</option>
+        <option value="complete" ${intake.status === 'complete' ? 'selected' : ''}>Complete</option>
+      </select>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Client Information</div>
+      <div class="detail-row"><span class="detail-label">Name</span><span class="detail-value">${escape(intake.client_name)}</span></div>
+      <div class="detail-row"><span class="detail-label">Email</span><span class="detail-value">${escape(intake.client_email || 'N/A')}</span></div>
+      <div class="detail-row"><span class="detail-label">Phone</span><span class="detail-value">${escape(intake.client_phone || 'N/A')}</span></div>
+      <div class="detail-row"><span class="detail-label">Package</span><span class="detail-value">${escape(intake.package_type)}</span></div>
+      <div class="detail-row"><span class="detail-label">Submitted</span><span class="detail-value">${date}</span></div>
+    </div>
+
+    ${data.Attorney_Flags ? `
+    <div class="detail-section">
+      <div class="detail-section-title">Attorney Flags</div>
+      ${flags}
+    </div>` : ''}
+
+    <div class="detail-section">
+      <div class="detail-section-title">Documents</div>
+      ${docButtons.length > 0 ? `<div style="display:flex;flex-wrap:wrap;">${docButtons.join('')}</div>` : '<div style="font-size:13px;color:var(--text-muted);">No documents generated</div>'}
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Collected Data</div>
+      ${dataRows || '<div style="font-size:13px;color:var(--text-muted);">No data</div>'}
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Attorney Notes</div>
+      <textarea class="notes-textarea" id="notesTextarea" placeholder="Add notes about this client...">${escape(intake.notes || '')}</textarea>
+      <div>
+        <button class="notes-save-btn" onclick="saveNotes(${intake.id})">Save Notes</button>
+        <span class="notes-saved" id="notesSaved">Saved</span>
+      </div>
+    </div>
+  `;
+}
+
+async function updateStatus(id, status) {
+  try {
+    await fetch(`/api/intakes/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    });
+    // Update local data
+    const intake = intakes.find(i => i.id === id);
+    if (intake) intake.status = status;
+    updateStats();
+    renderCards();
+  } catch (err) {
+    console.error('Failed to update status:', err);
+  }
+}
+
+async function saveNotes(id) {
+  const notes = document.getElementById('notesTextarea').value;
+  try {
+    await fetch(`/api/intakes/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes })
+    });
+    const savedEl = document.getElementById('notesSaved');
+    savedEl.classList.add('show');
+    setTimeout(() => savedEl.classList.remove('show'), 2000);
+  } catch (err) {
+    console.error('Failed to save notes:', err);
+  }
+}
+
+// Keyboard shortcut: Escape closes detail panel
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && currentDetailId) closeDetailPanel();
+});
+
+// Load on page ready
+loadIntakes();
+</script>
+</body>
+</html>
