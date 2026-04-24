@@ -1487,17 +1487,12 @@ app.post('/chat', async (req, res) => {
       }
       // Save to database
       saveIntake(intakeData, trustType);
-      // Route to correct doc gen function based on trust type
-      if (trustType === 'single') {
-        generateAndEmailSingle(intakeData).catch(err => console.error('Single doc gen error:', err));
-      } else if (trustType === 'standalone') {
-        generateAndEmailStandalone(intakeData).catch(err => console.error('Standalone doc gen error:', err));
-      } else if (trustType === 'selfservice') {
+      // Self-service: auto-generate and email docs to client
+      // Attorney-directed: send notification only — attorney reviews on dashboard and generates docs manually
+      if (trustType === 'selfservice') {
         generateAndEmailSelfService(intakeData).catch(err => console.error('Self-service doc gen error:', err));
-      } else if (trustType === 'snt') {
-        generateAndEmailSNT(intakeData).catch(err => console.error('SNT doc gen error:', err));
       } else {
-        generateAndEmail(intakeData).catch(err => console.error('Doc gen error:', err));
+        sendIntakeNotification(intakeData, trustType).catch(err => console.error('Notification email error:', err));
       }
       return res.json({ reply: closingMessage, complete: true, intakeData });
     }
@@ -1543,17 +1538,12 @@ app.post('/chat-stream', async (req, res) => {
           intakeData = JSON.parse(jsonStr);
           // Save to database
           saveIntake(intakeData, trustType);
-          // Route to correct doc gen function based on trust type
-          if (trustType === 'single') {
-            generateAndEmailSingle(intakeData).catch(err => console.error('Single doc gen error:', err));
-          } else if (trustType === 'standalone') {
-            generateAndEmailStandalone(intakeData).catch(err => console.error('Standalone doc gen error:', err));
-          } else if (trustType === 'selfservice') {
+          // Self-service: auto-generate and email docs to client
+          // Attorney-directed: send notification only
+          if (trustType === 'selfservice') {
             generateAndEmailSelfService(intakeData).catch(err => console.error('Self-service doc gen error:', err));
-          } else if (trustType === 'snt') {
-            generateAndEmailSNT(intakeData).catch(err => console.error('SNT doc gen error:', err));
           } else {
-            generateAndEmail(intakeData).catch(err => console.error('Doc gen error:', err));
+            sendIntakeNotification(intakeData, trustType).catch(err => console.error('Notification email error:', err));
           }
           res.write(`data: ${JSON.stringify({ type: 'complete', reply: closingMessage, intakeData })}\n\n`);
         } catch (e) {
@@ -2029,6 +2019,112 @@ Draft document attached: ${filename}
   });
 
   console.log(`Email sent: ${clientName} — SNT estate plan`);
+}
+
+// ─── Email — Intake Notification (no document attachment) ─────────────────────
+async function sendIntakeNotification(data, trustType) {
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD }
+  });
+
+  const packageLabels = {
+    'joint': 'Complete Estate Plan — Married (Joint Trust)',
+    'single': 'Complete Estate Plan — Single',
+    'standalone': 'Attorney-Directed Documents',
+    'snt': 'Special Needs Trust (Married)',
+  };
+  const packageLabel = packageLabels[trustType] || trustType;
+
+  let clientName;
+  if (trustType === 'snt') {
+    clientName = `${data.Husbands_first_name || ''} & ${data.Wifes_first_name || ''} ${data.LAST_NAME || ''}`.trim();
+  } else if (trustType === 'joint') {
+    clientName = `${data.Your_First_Name || ''} & ${data.Spouse_First_Name || ''} ${data.Your_Last_Name || ''}`.trim();
+  } else {
+    clientName = `${data.Your_First_Name || ''} ${data.Your_Last_Name || ''}`.trim();
+  }
+
+  const submitted = new Date().toLocaleString('en-US', { timeZone: 'America/Denver' });
+  const flags = data.Attorney_Flags
+    ? data.Attorney_Flags.split(' | ').map(f => `  ⚑ ${f}`).join('\n')
+    : '  None';
+
+  // Build a concise summary of key info
+  let keySummary = '';
+  if (trustType === 'snt') {
+    keySummary = `
+Spouse 1:           ${data.his_preferred_signature_name || data.Husbands_first_name || ''}
+Spouse 2:           ${data.her_preferred_signature_name || data.Wifes_first_name || ''}
+Special Needs Child: ${data.SNC_NAME || ''} (${data.sondaughter || ''})
+Trust Name:         ${data.NAME_OF_TRUST || ''}
+SNT Name:           ${data.SNT_NAME || ''}
+Successor Trustee:  ${data.AgentSuccessor_Trustee || ''}
+Children:           ${data.NAMES_OF_ALL_CHILDREN || ''}`;
+  } else if (trustType === 'joint') {
+    keySummary = `
+Client:             ${data.Your_First_Name || ''} ${data.Your_Last_Name || ''}
+Spouse:             ${data.Spouse_First_Name || ''} ${data.Your_Last_Name || ''}
+Trust Name:         ${data.Name_of_Trust || ''}
+Successor Trustee:  ${data.First_Choice_Successor_Trustee || ''}
+Children:           ${data.Full_Legal_Names_of_Children || ''}`;
+  } else if (trustType === 'single') {
+    keySummary = `
+Client:             ${data.Your_First_Name || ''} ${data.Your_Last_Name || ''}
+Trust Name:         ${data.Name_of_Trust || ''}
+Successor Trustee:  ${data.First_Choice_Successor_Trustee || ''}
+Children:           ${data.Full_Legal_Names_of_Children || ''}`;
+  } else {
+    const docsSelected = [
+      data.needs_dpoa ? 'Financial POA' : null,
+      data.needs_will ? 'Will' : null,
+      data.needs_hcd  ? 'Healthcare Directive' : null,
+    ].filter(Boolean).join(', ');
+    keySummary = `
+Client:             ${data.Your_First_Name || ''} ${data.Your_Last_Name || ''}
+Documents:          ${docsSelected}
+Successor Trustee:  ${data.First_Choice_Successor_Trustee || ''}`;
+  }
+
+  const emailBody = `
+New intake submitted — ready for attorney review on the dashboard.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+INTAKE NOTIFICATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Client:     ${clientName}
+Package:    ${packageLabel}
+Submitted:  ${submitted} (Mountain Time)
+${keySummary}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ATTORNEY FLAGS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${flags}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NEXT STEPS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1. Review intake data on the attorney dashboard
+  2. Edit merge fields as needed
+  3. Resolve attorney flags
+  4. Generate documents when ready
+
+Dashboard: ${process.env.RENDER_EXTERNAL_URL || 'https://your-app.onrender.com'}/dashboard
+
+— Flex Legal Services Intake System
+  `.trim();
+
+  const subject = `[NEW INTAKE] ${clientName} — ${packageLabel} — Review Required`;
+
+  await transporter.sendMail({
+    from: `"Flex Legal Intake" <${GMAIL_USER}>`,
+    to: NOTIFY_EMAIL,
+    subject,
+    text: emailBody,
+  });
+
+  console.log(`Notification email sent: ${clientName} — ${packageLabel}`);
 }
 
 // ─── Email — Standalone ───────────────────────────────────────────────────────
@@ -2637,6 +2733,100 @@ app.get('/api/intakes/:id/download/:docType', (req, res) => {
     res.send(buf);
   } catch (err) {
     console.error('Document download error:', err);
+    res.status(500).json({ error: 'Failed to generate document' });
+  }
+});
+
+// ─── Update intake fields (attorney edits before generating docs) ─────────────
+app.patch('/api/intakes/:id/fields', (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not ready' });
+  const id = parseInt(req.params.id);
+  const updates = req.body.fields; // { fieldName: newValue, ... }
+  if (!updates || typeof updates !== 'object') return res.status(400).json({ error: 'Missing fields object' });
+
+  const stmt = db.prepare('SELECT intake_data FROM intakes WHERE id = ?');
+  stmt.bind([id]);
+  if (!stmt.step()) { stmt.free(); return res.status(404).json({ error: 'Not found' }); }
+  const row = stmt.getAsObject();
+  stmt.free();
+
+  const data = JSON.parse(row.intake_data || '{}');
+  // Merge updates into intake data
+  Object.entries(updates).forEach(([key, value]) => {
+    data[key] = value;
+  });
+
+  const updateStmt = db.prepare("UPDATE intakes SET intake_data = ?, updated_at = datetime('now') WHERE id = ?");
+  updateStmt.run([JSON.stringify(data), id]);
+  updateStmt.free();
+  saveDatabase();
+
+  res.json({ ok: true, updated: Object.keys(updates) });
+});
+
+// ─── Generate document on demand (attorney clicks Generate) ──────────────────
+app.post('/api/intakes/:id/generate', (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not ready' });
+  const stmt = db.prepare('SELECT * FROM intakes WHERE id = ?');
+  stmt.bind([parseInt(req.params.id)]);
+  if (!stmt.step()) { stmt.free(); return res.status(404).json({ error: 'Not found' }); }
+  const row = stmt.getAsObject();
+  stmt.free();
+
+  const data = JSON.parse(row.intake_data || '{}');
+  const lastName = data.Your_Last_Name || data.LAST_NAME || 'Client';
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const trustType = row.trust_type;
+
+  // Determine template and label
+  let templateFile, docLabel;
+  if (trustType === 'joint') { templateFile = 'joint_trust.docx'; docLabel = 'Joint_Trust'; }
+  else if (trustType === 'single') { templateFile = 'single_trust.docx'; docLabel = 'Single_Trust'; }
+  else if (trustType === 'snt') { templateFile = 'snt_married.docx'; docLabel = 'SNT_Estate_Plan'; }
+  else if (trustType === 'standalone') {
+    // Standalone generates multiple docs — use the existing download endpoint per doc type
+    return res.status(400).json({ error: 'Use individual document downloads for standalone packages' });
+  }
+  else { return res.status(400).json({ error: 'Cannot generate docs for this trust type' }); }
+
+  const templatePath = path.join(__dirname, 'templates', templateFile);
+  if (!fs.existsSync(templatePath)) return res.status(404).json({ error: 'Template not found' });
+
+  try {
+    const content = fs.readFileSync(templatePath, 'binary');
+    const zip = new PizZip(content);
+
+    // Pass through all data fields as merge data
+    const mergeData = { ...data };
+
+    // Render headers/footers
+    Object.keys(zip.files).forEach(fname => {
+      if ((fname.startsWith('word/footer') || fname.startsWith('word/header')) && fname.endsWith('.xml')) {
+        try {
+          let fc = zip.files[fname].asText();
+          Object.entries(mergeData).forEach(([key, value]) => {
+            fc = fc.replace(new RegExp(`\u00ABr${key}\u00BB`, 'g'), value || '___________');
+            fc = fc.replace(new RegExp(`\u00AB${key}\u00BB`, 'g'), value || '___________');
+          });
+          zip.file(fname, fc);
+        } catch (e) { /* skip binary */ }
+      }
+    });
+
+    const doc = new Docxtemplater(zip, {
+      paragraphLoop: true, linebreaks: true,
+      delimiters: { start: '\u00AB', end: '\u00BB' },
+      nullGetter: () => '___________',
+    });
+    doc.render(mergeData);
+    const buf = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
+    const filename = `${lastName.replace(/\s+/g, '_')}_${docLabel}_${dateStr}.docx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buf);
+  } catch (err) {
+    console.error('Document generate error:', err);
     res.status(500).json({ error: 'Failed to generate document' });
   }
 });

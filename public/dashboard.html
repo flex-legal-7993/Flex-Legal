@@ -411,6 +411,117 @@
     border-color: var(--gold);
   }
 
+  /* Editable merge fields */
+  .field-group { margin-bottom: 12px; }
+  .field-group label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 3px;
+  }
+  .field-group input {
+    width: 100%;
+    padding: 7px 10px;
+    font-size: 13px;
+    font-family: 'Source Sans 3', sans-serif;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--navy);
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+  }
+  .field-group input:focus {
+    outline: none;
+    border-color: var(--gold);
+  }
+  .field-group input.field-changed {
+    border-color: var(--gold);
+    background: #fffdf5;
+  }
+  .fields-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 16px;
+  }
+  .fields-grid .field-full { grid-column: 1 / -1; }
+
+  /* Generate button */
+  .generate-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: var(--navy);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'Source Sans 3', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 6px;
+  }
+  .generate-btn:hover { background: var(--navy-light); }
+  .generate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .generate-btn .btn-icon { font-size: 16px; }
+
+  /* Save fields button */
+  .save-fields-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: var(--gold);
+    color: var(--navy);
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'Source Sans 3', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .save-fields-btn:hover { background: var(--gold-light); }
+  .fields-saved {
+    display: inline-block;
+    margin-left: 10px;
+    font-size: 12px;
+    color: var(--success);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .fields-saved.show { opacity: 1; }
+
+  /* Attorney flags editable */
+  .flag-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .flag-item:last-child { border-bottom: none; }
+  .flag-icon { color: #991b1b; font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+  .flag-text { flex: 1; color: #991b1b; line-height: 1.4; }
+  .flag-resolved .flag-text { color: var(--text-muted); text-decoration: line-through; }
+  .flag-resolve-btn {
+    padding: 2px 8px;
+    font-size: 11px;
+    background: var(--cream);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--navy);
+    white-space: nowrap;
+  }
+  .flag-resolve-btn:hover { background: var(--gold-light); }
+
   /* Responsive */
   @media (max-width: 900px) {
     .board { padding: 12px; gap: 10px; }
@@ -673,6 +784,99 @@ function closeDetailPanel() {
   currentDetailId = null;
 }
 
+function getMergeFieldDefs(trustType) {
+  // Return the editable merge fields relevant to each trust type
+  // Format: { key, label, half (true = half-width) }
+  const common = [
+    { key: 'Address', label: 'Address' },
+    { key: 'City', label: 'City', half: true },
+    { key: 'State', label: 'State', half: true },
+    { key: 'Zip_Code', label: 'Zip', half: true },
+    { key: 'County', label: 'County', half: true },
+  ];
+
+  if (trustType === 'snt') {
+    return [
+      { key: 'Husbands_first_name', label: 'Spouse 1 First Name', half: true },
+      { key: 'Wifes_first_name', label: 'Spouse 2 First Name', half: true },
+      { key: 'LAST_NAME', label: 'Last Name', half: true },
+      { key: 'his_preferred_signature_name', label: 'Spouse 1 Signature Name' },
+      { key: 'her_preferred_signature_name', label: 'Spouse 2 Signature Name' },
+      ...common,
+      { key: 'SNC_NAME', label: 'Special Needs Child Full Name' },
+      { key: 'SNC_First_Name', label: 'SN Child First Name', half: true },
+      { key: 'sondaughter', label: 'Son/Daughter', half: true },
+      { key: 'NAME_OF_TRUST', label: 'Trust Name' },
+      { key: 'SNT_NAME', label: 'Special Needs Trust Name' },
+      { key: 'AgentSuccessor_Trustee', label: 'Successor Trustee' },
+      { key: 'ALTERNATE_AGENT', label: 'Backup Trustee' },
+      { key: 'NAMES_OF_ALL_CHILDREN', label: 'All Children' },
+      { key: 'Number_of_kids', label: 'Number of Kids', half: true },
+      { key: 'Trustee_heshe', label: 'Trustee Pronoun (he/she)', half: true },
+      { key: 'SN_hisher', label: 'SN Child Pronoun (his/her)', half: true },
+      { key: 'SN_heshe', label: 'SN Child Pronoun (he/she)', half: true },
+      { key: 'and_then_whomsoever_a_majority_of_the_t', label: 'Majority Clause (children/descendants)' },
+      { key: 'Alternate_Agent_Name', label: 'Backup Healthcare Agent' },
+      { key: 'Alternate_Agent_Address', label: 'Backup HC Agent Address' },
+      { key: 'Alternate_Agent_City', label: 'Backup HC Agent City', half: true },
+      { key: 'Alternate_Agent_State', label: 'Backup HC Agent State', half: true },
+      { key: 'Alternate_Agent_Zip', label: 'Backup HC Agent Zip', half: true },
+      { key: 'Alternate_Agent_Cell_Phone', label: 'Backup HC Agent Phone', half: true },
+    ];
+  } else if (trustType === 'joint') {
+    return [
+      { key: 'Your_First_Name', label: 'Spouse 1 First Name', half: true },
+      { key: 'Your_Last_Name', label: 'Last Name', half: true },
+      { key: 'Your_Preferred_Signature_Name', label: 'Spouse 1 Signature Name' },
+      { key: 'Spouse_First_Name', label: 'Spouse 2 First Name', half: true },
+      { key: 'Spouses_Preferred_Signature_Name', label: 'Spouse 2 Signature Name' },
+      ...common,
+      { key: 'Name_of_Trust', label: 'Trust Name' },
+      { key: 'First_Choice_Successor_Trustee', label: 'First Choice Successor Trustee' },
+      { key: 'Second_Choice_Successor_Trustee', label: 'Second Choice Successor Trustee' },
+      { key: 'Full_Legal_Names_of_Children', label: 'Children' },
+      { key: 'Alternate_Agent_Name', label: 'Backup Healthcare Agent' },
+      { key: 'Alternate_Agent_Address', label: 'Backup HC Agent Address' },
+      { key: 'Alternate_Agent_City', label: 'Backup HC Agent City', half: true },
+      { key: 'Alternate_Agent_State', label: 'Backup HC Agent State', half: true },
+    ];
+  } else if (trustType === 'single') {
+    return [
+      { key: 'Your_First_Name', label: 'First Name', half: true },
+      { key: 'Your_Last_Name', label: 'Last Name', half: true },
+      { key: 'Your_Preferred_Signature_Name', label: 'Signature Name' },
+      ...common,
+      { key: 'Name_of_Trust', label: 'Trust Name' },
+      { key: 'First_Choice_Successor_Trustee', label: 'First Choice Successor Trustee' },
+      { key: 'Second_Choice_Successor_Trustee', label: 'Second Choice Successor Trustee' },
+      { key: 'Guardian_Name', label: 'Guardian' },
+      { key: 'Full_Legal_Names_of_Children', label: 'Children' },
+      { key: 'DPOA_Agent_Name', label: 'Financial POA Agent' },
+      { key: 'Agent_Address', label: 'POA Agent Address' },
+      { key: 'Agent_Name', label: 'Healthcare Agent' },
+      { key: 'Alternate_Agent_Name', label: 'Backup Healthcare Agent' },
+    ];
+  } else if (trustType === 'standalone') {
+    return [
+      { key: 'Your_First_Name', label: 'First Name', half: true },
+      { key: 'Your_Last_Name', label: 'Last Name', half: true },
+      { key: 'Your_Preferred_Signature_Name', label: 'Signature Name' },
+      ...common,
+      { key: 'DPOA_Agent_Name', label: 'Financial POA Agent' },
+      { key: 'Agent_Address', label: 'POA Agent Address' },
+      { key: 'First_Choice_Successor_Trustee', label: 'Successor Trustee / Backup Agent' },
+      { key: 'Second_Choice_Successor_Trustee', label: 'Second Choice Trustee' },
+      { key: 'Name_of_Trust', label: 'Trust Name' },
+      { key: 'Full_Legal_Names_of_Children', label: 'Children' },
+      { key: 'Guardian_Name', label: 'Guardian' },
+      { key: 'Agent_Name', label: 'Healthcare Agent' },
+      { key: 'Alternate_Agent_Name', label: 'Backup Healthcare Agent' },
+    ];
+  }
+  // selfservice — no editable fields (auto-generated)
+  return [];
+}
+
 function renderDetail(intake) {
   const data = intake.intake_data || {};
   const date = new Date(intake.created_at + 'Z').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
@@ -680,44 +884,86 @@ function renderDetail(intake) {
 
   document.getElementById('detailName').textContent = intake.client_name;
 
-  // Document download buttons
-  const docButtons = [];
-  const docs = Array.isArray(intake.documents) ? intake.documents : [];
-  if (docs.includes('Joint Trust') || intake.trust_type === 'joint') {
-    docButtons.push(`<a class="doc-download-btn" href="/api/intakes/${intake.id}/download/joint_trust" target="_blank">&#128196; Joint Trust</a>`);
-  }
-  if (docs.includes('Single Trust') || intake.trust_type === 'single') {
-    docButtons.push(`<a class="doc-download-btn" href="/api/intakes/${intake.id}/download/single_trust" target="_blank">&#128196; Single Trust</a>`);
-  }
-  if (docs.includes('SNT Estate Plan') || intake.trust_type === 'snt') {
-    docButtons.push(`<a class="doc-download-btn" href="/api/intakes/${intake.id}/download/snt" target="_blank">&#128196; SNT Estate Plan</a>`);
-  }
-  if (docs.includes('Financial POA')) {
-    docButtons.push(`<a class="doc-download-btn" href="/api/intakes/${intake.id}/download/dpoa" target="_blank">&#128196; Financial POA</a>`);
-  }
-  if (docs.includes('Will')) {
-    docButtons.push(`<a class="doc-download-btn" href="/api/intakes/${intake.id}/download/will" target="_blank">&#128196; Will</a>`);
-  }
-  if (docs.includes('Healthcare Directive')) {
-    docButtons.push(`<a class="doc-download-btn" href="/api/intakes/${intake.id}/download/hcd" target="_blank">&#128196; Healthcare Directive</a>`);
-  }
+  // Attorney flags
+  const flagsRaw = data.Attorney_Flags || '';
+  const flagItems = flagsRaw ? flagsRaw.split(' | ').filter(f => f.trim()) : [];
+  const flagsHtml = flagItems.length > 0
+    ? flagItems.map((f, i) => `<div class="flag-item" id="flag-${i}"><span class="flag-icon">&#9873;</span><span class="flag-text">${escape(f)}</span><button class="flag-resolve-btn" onclick="resolveFlag(${i})">Resolve</button></div>`).join('')
+    : '<div style="font-size:13px;color:var(--success);">No flags</div>';
 
-  // Collected data rows
-  const skipKeys = ['Trust_Type', 'needs_dpoa', 'needs_will', 'needs_hcd', 'client_email', 'Attorney_Flags'];
-  const dataRows = Object.entries(data)
-    .filter(([k, v]) => !skipKeys.includes(k) && v && v !== 'N/A' && v !== '' && v !== 'false' && v !== false)
-    .map(([k, v]) => {
-      const label = k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-      const val = typeof v === 'string' && v.length > 120 ? v.substring(0, 120) + '...' : v;
-      return `<div class="detail-row"><span class="detail-label">${escape(label)}</span><span class="detail-value">${escape(String(val))}</span></div>`;
+  // Editable merge fields (attorney-directed only)
+  const fieldDefs = getMergeFieldDefs(intake.trust_type);
+  let fieldsHtml = '';
+  if (fieldDefs.length > 0) {
+    const fieldInputs = fieldDefs.map(f => {
+      const val = data[f.key] || '';
+      const cls = f.half ? 'field-group' : 'field-group field-full';
+      return `<div class="${cls}"><label>${escape(f.label)}</label><input type="text" data-field="${f.key}" value="${escape(String(val))}" oninput="this.classList.add('field-changed')"></div>`;
     }).join('');
+    fieldsHtml = `
+      <div class="detail-section">
+        <div class="detail-section-title">Merge Fields <span style="font-weight:400;font-size:11px;color:var(--text-muted);">(edit before generating)</span></div>
+        <div class="fields-grid">${fieldInputs}</div>
+        <div style="margin-top:10px;">
+          <button class="save-fields-btn" onclick="saveFields(${intake.id})">Save Changes</button>
+          <span class="fields-saved" id="fieldsSaved">Saved</span>
+        </div>
+      </div>
+    `;
+  }
 
-  const flags = data.Attorney_Flags
-    ? data.Attorney_Flags.split(' | ').map(f => `<div style="padding:4px 0;font-size:13px;color:#991b1b;">&#9873; ${escape(f)}</div>`).join('')
-    : '';
+  // Generate button (attorney-directed only, not standalone — standalone uses per-doc downloads)
+  let generateHtml = '';
+  if (!isSelfService && intake.trust_type !== 'standalone') {
+    generateHtml = `
+      <div class="detail-section">
+        <div class="detail-section-title">Generate Documents</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">Review and edit merge fields above, then generate the final document package.</div>
+        <button class="generate-btn" id="generateBtn" onclick="generateDocument(${intake.id})">
+          <span class="btn-icon">&#128196;</span> Generate Document
+        </button>
+      </div>
+    `;
+  }
+
+  // For standalone, show per-document download buttons
+  let standaloneDocsHtml = '';
+  if (intake.trust_type === 'standalone') {
+    const docButtons = [];
+    if (data.needs_dpoa) docButtons.push(`<a class="doc-download-btn" href="/api/intakes/${intake.id}/download/dpoa" target="_blank">&#128196; Financial POA</a>`);
+    if (data.needs_will) docButtons.push(`<a class="doc-download-btn" href="/api/intakes/${intake.id}/download/will" target="_blank">&#128196; Will</a>`);
+    if (data.needs_hcd) docButtons.push(`<a class="doc-download-btn" href="/api/intakes/${intake.id}/download/hcd" target="_blank">&#128196; Healthcare Directive</a>`);
+    if (docButtons.length > 0) {
+      standaloneDocsHtml = `
+        <div class="detail-section">
+          <div class="detail-section-title">Generate Documents</div>
+          <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">Review and edit merge fields above, then download individual documents.</div>
+          <div style="display:flex;flex-wrap:wrap;">${docButtons.join('')}</div>
+        </div>
+      `;
+    }
+  }
+
+  // Self-service: show existing download buttons (already generated)
+  let selfServiceDocsHtml = '';
+  if (isSelfService) {
+    const docButtons = [];
+    const docs = Array.isArray(intake.documents) ? intake.documents : [];
+    if (docs.includes('Financial POA')) docButtons.push(`<a class="doc-download-btn" href="/api/intakes/${intake.id}/download/dpoa" target="_blank">&#128196; Financial POA</a>`);
+    if (docs.includes('Will')) docButtons.push(`<a class="doc-download-btn" href="/api/intakes/${intake.id}/download/will" target="_blank">&#128196; Will</a>`);
+    if (docs.includes('Healthcare Directive')) docButtons.push(`<a class="doc-download-btn" href="/api/intakes/${intake.id}/download/hcd" target="_blank">&#128196; Healthcare Directive</a>`);
+    if (docButtons.length > 0) {
+      selfServiceDocsHtml = `
+        <div class="detail-section">
+          <div class="detail-section-title">Documents (Auto-Generated)</div>
+          <div style="display:flex;flex-wrap:wrap;">${docButtons.join('')}</div>
+        </div>
+      `;
+    }
+  }
 
   document.getElementById('detailBody').innerHTML = `
-    ${isSelfService ? '<div style="background:#fff3cd;border:1px solid #d4a017;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#664d03;font-weight:600;">Self-Service — No attorney-client relationship. Documents not attorney-reviewed.</div>' : ''}
+    ${isSelfService ? '<div style="background:#fff3cd;border:1px solid #d4a017;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#664d03;font-weight:600;">Self-Service — No attorney-client relationship. Documents auto-generated and emailed to client.</div>' : ''}
 
     <div class="detail-section">
       <div class="detail-section-title">Status</div>
@@ -738,17 +984,16 @@ function renderDetail(intake) {
       <div class="detail-row"><span class="detail-label">Submitted</span><span class="detail-value">${date}</span></div>
     </div>
 
-    ${flags ? `<div class="detail-section"><div class="detail-section-title">Attorney Flags</div>${flags}</div>` : ''}
-
     <div class="detail-section">
-      <div class="detail-section-title">Documents</div>
-      ${docButtons.length > 0 ? `<div style="display:flex;flex-wrap:wrap;">${docButtons.join('')}</div>` : '<div style="font-size:13px;color:var(--text-muted);">No documents generated</div>'}
+      <div class="detail-section-title">Attorney Flags</div>
+      <div id="flagsContainer">${flagsHtml}</div>
     </div>
 
-    <div class="detail-section">
-      <div class="detail-section-title">Collected Data</div>
-      ${dataRows || '<div style="font-size:13px;color:var(--text-muted);">No data</div>'}
-    </div>
+    ${fieldsHtml}
+
+    ${generateHtml}
+    ${standaloneDocsHtml}
+    ${selfServiceDocsHtml}
 
     <div class="detail-section">
       <div class="detail-section-title">Attorney Notes</div>
@@ -789,6 +1034,108 @@ async function saveNotes(id) {
     setTimeout(() => savedEl.classList.remove('show'), 2000);
   } catch (err) {
     console.error('Failed to save notes:', err);
+  }
+}
+
+// Save edited merge fields
+async function saveFields(id) {
+  const inputs = document.querySelectorAll('.fields-grid input[data-field]');
+  const fields = {};
+  inputs.forEach(input => {
+    fields[input.dataset.field] = input.value;
+  });
+
+  try {
+    const resp = await fetch(`/api/intakes/${id}/fields`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields })
+    });
+    if (resp.ok) {
+      // Update local data
+      const intake = intakes.find(i => i.id === id);
+      if (intake && intake.intake_data) {
+        Object.assign(intake.intake_data, fields);
+      }
+      // Clear changed indicators
+      inputs.forEach(input => input.classList.remove('field-changed'));
+      const savedEl = document.getElementById('fieldsSaved');
+      savedEl.classList.add('show');
+      setTimeout(() => savedEl.classList.remove('show'), 2000);
+    }
+  } catch (err) {
+    console.error('Failed to save fields:', err);
+    alert('Failed to save changes. Please try again.');
+  }
+}
+
+// Generate document and download
+async function generateDocument(id) {
+  const btn = document.getElementById('generateBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="btn-icon">&#9203;</span> Generating...';
+
+  try {
+    // First save any pending field changes
+    const inputs = document.querySelectorAll('.fields-grid input[data-field]');
+    if (inputs.length > 0) {
+      const fields = {};
+      inputs.forEach(input => { fields[input.dataset.field] = input.value; });
+      await fetch(`/api/intakes/${id}/fields`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields })
+      });
+    }
+
+    // Then generate and download
+    const resp = await fetch(`/api/intakes/${id}/generate`, { method: 'POST' });
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.error || 'Generation failed');
+    }
+
+    // Download the file
+    const blob = await resp.blob();
+    const disposition = resp.headers.get('Content-Disposition') || '';
+    const filenameMatch = disposition.match(/filename="(.+?)"/);
+    const filename = filenameMatch ? filenameMatch[1] : 'document.docx';
+
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+
+    btn.innerHTML = '<span class="btn-icon">&#9989;</span> Downloaded!';
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="btn-icon">&#128196;</span> Generate Document';
+    }, 2000);
+  } catch (err) {
+    console.error('Document generation failed:', err);
+    btn.innerHTML = '<span class="btn-icon">&#10060;</span> Failed — Try Again';
+    btn.disabled = false;
+    setTimeout(() => {
+      btn.innerHTML = '<span class="btn-icon">&#128196;</span> Generate Document';
+    }, 3000);
+  }
+}
+
+// Resolve an attorney flag (strikes it through)
+function resolveFlag(index) {
+  const flagEl = document.getElementById(`flag-${index}`);
+  if (flagEl) {
+    flagEl.classList.toggle('flag-resolved');
+    const btn = flagEl.querySelector('.flag-resolve-btn');
+    if (flagEl.classList.contains('flag-resolved')) {
+      btn.textContent = 'Unresolve';
+    } else {
+      btn.textContent = 'Resolve';
+    }
   }
 }
 
