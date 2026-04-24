@@ -689,6 +689,9 @@ function renderDetail(intake) {
   if (docs.includes('Single Trust') || intake.trust_type === 'single') {
     docButtons.push(`<a class="doc-download-btn" href="/api/intakes/${intake.id}/download/single_trust" target="_blank">&#128196; Single Trust</a>`);
   }
+  if (docs.includes('SNT Estate Plan') || intake.trust_type === 'snt') {
+    docButtons.push(`<a class="doc-download-btn" href="/api/intakes/${intake.id}/download/snt" target="_blank">&#128196; SNT Estate Plan</a>`);
+  }
   if (docs.includes('Financial POA')) {
     docButtons.push(`<a class="doc-download-btn" href="/api/intakes/${intake.id}/download/dpoa" target="_blank">&#128196; Financial POA</a>`);
   }

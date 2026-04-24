@@ -1221,7 +1221,7 @@
 // ─── Trust type tracking ──────────────────────────────────────────────────────
 function getTrustType() {
   if (selectedPackage === 'Complete Estate Plan — Single') return 'single';
-  if (selectedPackage === 'Special Needs Trust') return 'standalone';
+  if (selectedPackage === 'Special Needs Trust') return 'snt';
   if (selectedPackage === 'POA — Self-Service') return 'selfservice';
   if (selectedPackage === 'Healthcare Directive — Self-Service') return 'selfservice';
   if (selectedPackage === 'Will — Self-Service') return 'selfservice';
@@ -1646,6 +1646,7 @@ function showConfirmation(data) {
   const isSingle = getTrustType() === 'single';
   const isStandalone = getTrustType() === 'standalone';
   const isSelfService = getTrustType() === 'selfservice';
+  const isSNT = getTrustType() === 'snt';
 
   let fields;
   if (isSelfService) {
@@ -1673,6 +1674,25 @@ function showConfirmation(data) {
       data['needs_hcd'] ? ['Living Will', data['Living_Will'] ? `Option ${data['Living_Will']}` : null] : null,
       ['Submitted', new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })],
     ].filter(Boolean);
+  } else if (isSNT) {
+    // Special Needs Trust summary fields
+    const spouse1 = data['his_preferred_signature_name'] || data['Husbands_first_name'] || 'Spouse 1';
+    const spouse2 = data['her_preferred_signature_name'] || data['Wifes_first_name'] || 'Spouse 2';
+    fields = [
+      ['Trust Name', data['NAME_OF_TRUST']],
+      ['SNT Name', data['SNT_NAME']],
+      ['Trustor 1', spouse1],
+      ['Trustor 2', spouse2],
+      ['Special Needs Child', `${data['SNC_NAME'] || ''} (${data['sondaughter'] || ''})`],
+      ['All Children', data['NAMES_OF_ALL_CHILDREN']],
+      ['Successor Trustee', data['AgentSuccessor_Trustee']],
+      ['Backup Trustee', data['ALTERNATE_AGENT']],
+      ['Guardian', data['Guardian_Name'] || 'Same as successor trustee'],
+      ['Backup Healthcare Agent', data['Alternate_Agent_Name']],
+      ['Living Will — ' + (data['Husbands_first_name'] || 'Spouse 1'), data['Husband_Living_Will'] ? `Option ${data['Husband_Living_Will']}` : null],
+      ['Living Will — ' + (data['Wifes_first_name'] || 'Spouse 2'), data['Wife_Living_Will'] ? `Option ${data['Wife_Living_Will']}` : null],
+      ['Submitted', new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })],
+    ];
   } else if (isSingle) {
     // Single trust summary fields
     fields = [
@@ -1723,7 +1743,19 @@ function showConfirmation(data) {
   const docsList = document.getElementById('docsList');
   docsList.innerHTML = '';
   let docs;
-  if (isSelfService || isStandalone) {
+  if (isSNT) {
+    const s1 = `${data['Husbands_first_name'] || ''} ${data['LAST_NAME'] || ''}`.trim();
+    const s2 = `${data['Wifes_first_name'] || ''} ${data['LAST_NAME'] || ''}`.trim();
+    docs = [
+      { name: data['NAME_OF_TRUST'] || 'Family Revocable Living Trust', sub: 'Including Special Needs Trust, Certification of Trust, and Asset Transfer Instructions' },
+      { name: `Pour-Over Will — ${s1}`, sub: 'Safety net for assets outside trust' },
+      { name: `Pour-Over Will — ${s2}`, sub: 'Safety net for assets outside trust' },
+      { name: `Durable Power of Attorney — ${s1}`, sub: 'Financial and legal authority' },
+      { name: `Durable Power of Attorney — ${s2}`, sub: 'Financial and legal authority' },
+      { name: `Health Care Directive — ${s1}`, sub: 'Healthcare POA and Living Will' },
+      { name: `Health Care Directive — ${s2}`, sub: 'Healthcare POA and Living Will' },
+    ];
+  } else if (isSelfService || isStandalone) {
     docs = [];
     if (data['needs_dpoa']) docs.push({ name: `Durable Power of Attorney — ${data['Your_First_Name'] || ''} ${data['Your_Last_Name'] || ''}`.trim(), sub: isSelfService ? 'Self-prepared — review with attorney before signing' : 'Financial and legal authority' });
     if (data['needs_will']) docs.push({ name: `Last Will & Testament — ${data['Your_First_Name'] || ''} ${data['Your_Last_Name'] || ''}`.trim(), sub: isSelfService ? 'Self-prepared — review with attorney before signing' : 'Pour-over will' });
@@ -1813,7 +1845,7 @@ consentBtn.addEventListener('click', () => {
   document.getElementById('chatCard').classList.remove('hidden');
   setTimeout(() => resizeChatInput(), 50);
 
-  const startEndpoint = trustType === 'single' ? '/start-single' : trustType === 'standalone' ? '/start-standalone' : '/start';
+  const startEndpoint = trustType === 'single' ? '/start-single' : trustType === 'snt' ? '/start-sns' : trustType === 'standalone' ? '/start-standalone' : '/start';
   init(clientInfo, selectedPackage, startEndpoint);
 });
 

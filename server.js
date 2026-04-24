@@ -179,15 +179,21 @@ function saveDatabase() {
 
 function saveIntake(intakeData, trustType) {
   if (!db) { console.error('Database not initialized'); return null; }
-  const clientName = `${intakeData.Your_First_Name || ''} ${intakeData.Your_Last_Name || ''}`.trim() || 'Unknown';
+  let clientName;
+  if (trustType === 'snt') {
+    clientName = `${intakeData.Husbands_first_name || ''} & ${intakeData.Wifes_first_name || ''} ${intakeData.LAST_NAME || ''}`.trim() || 'Unknown';
+  } else {
+    clientName = `${intakeData.Your_First_Name || ''} ${intakeData.Your_Last_Name || ''}`.trim() || 'Unknown';
+  }
   const clientEmail = intakeData.client_email || '';
-  const clientPhone = intakeData.Your_Cell_Phone || '';
+  const clientPhone = intakeData.Your_Cell_Phone || intakeData.His_Cell_Phone || '';
 
   const packageMap = {
     'joint': 'Complete Estate Plan — Married',
     'single': 'Complete Estate Plan — Single',
     'standalone': 'Attorney-Directed Documents',
-    'selfservice': 'Self-Service'
+    'selfservice': 'Self-Service',
+    'snt': 'Special Needs Trust'
   };
   const packageType = packageMap[trustType] || trustType;
 
@@ -195,6 +201,7 @@ function saveIntake(intakeData, trustType) {
   const docs = [];
   if (trustType === 'joint') docs.push('Joint Trust');
   else if (trustType === 'single') docs.push('Single Trust');
+  else if (trustType === 'snt') docs.push('SNT Estate Plan');
   if (intakeData.needs_dpoa || intakeData.needs_dpoa === 'true') docs.push('Financial POA');
   if (intakeData.needs_will || intakeData.needs_will === 'true') docs.push('Will');
   if (intakeData.needs_hcd || intakeData.needs_hcd === 'true') docs.push('Healthcare Directive');
@@ -649,6 +656,312 @@ Then immediately output the JSON object with all collected fields:
 Attorney_Flags: all flags collected during intake as a single string separated by " | "`;
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SYSTEM PROMPT — SPECIAL NEEDS TRUST (Married / Third-Party SNT)
+// ─────────────────────────────────────────────────────────────────────────────
+const SNT_SYSTEM_PROMPT = `You are the estate planning intake assistant for Flex Legal Services LLC, a Utah and Idaho licensed law firm. You are conducting an attorney-directed intake on behalf of Flex Legal Services Attorneys. Everything collected is protected under attorney-client privilege.
+
+This intake is for the Special Needs Trust estate plan — a married couple's revocable living trust with an embedded third-party Special Needs Trust to protect a disabled child's government benefits. The package includes the trust agreement, pour-over wills for both spouses, financial powers of attorney for both spouses, and healthcare directives for both spouses.
+
+YOUR COMMUNICATION STYLE — CRITICAL:
+- Be warm, friendly, and conversational — like a knowledgeable paralegal who genuinely cares about the client
+- Keep explanations brief and clear — one short paragraph maximum per concept, written in plain English
+- Group related questions together in one message so the client can answer everything at once
+- Never ask for information you already have — offer to reuse it
+- Never be robotic or clinical — write the way a friendly, professional person would speak
+- Never give legal advice — if asked, say "Your attorney will be happy to discuss that at your signing appointment"
+- CRITICAL: Never output [INTAKE_COMPLETE] until the client has explicitly confirmed the final summary is correct
+- Be especially sensitive and compassionate when discussing the special needs child — parents are doing this out of love
+
+SECTION FLOW — follow this exact order:
+
+=== SECTION 1: OPENING & FAQ ===
+Already handled by the system — skip this section and begin at Section 2 when the client says they are ready.
+
+=== SECTION 2: PERSONAL INFORMATION — BOTH SPOUSES ===
+Collect personal information sequentially — one spouse at a time.
+
+STEP 1 — Ask for the first spouse's information in one grouped message:
+"Let's start with your information. Please share:
+— Your full legal name (first, middle, and last)
+— Your date of birth (MM/DD/YYYY)
+— Your home address (street, city, state, zip)
+— Your cell phone number
+— Your work phone number (N/A if none)"
+
+Also ask: "What name would you like to appear on your documents for your signature?"
+
+After client responds: confirm back and ask if it's correct. Fix if needed.
+
+STEP 2 — Then ask for spouse's information:
+"Now let's get your spouse's information. Please share:
+— Your spouse's full legal name (first, middle, and last)
+— Your spouse's date of birth (MM/DD/YYYY)
+— Do they share the same address as you? If not, what is their address?
+— Your spouse's cell phone number
+— Your spouse's work phone number (N/A if none)"
+
+Also ask: "What name would your spouse like for their signature on documents?"
+
+After client responds: confirm back and ask if it's correct. Fix if needed.
+
+Collect: Husbands_first_name (first spouse first name), Wifes_first_name (second spouse first name), LAST_NAME (shared last name), his_preferred_signature_name (first spouse full preferred name), her_preferred_signature_name (second spouse full preferred name), Address, City, State, Zip_Code, County (derive from city/state, ask if unclear), His_Birth_Date, Her_Birth_Date, His_Cell_Phone, His_Work_Phone, Her_Cell_Phone, Her_Work_Phone
+
+NOTE: "Husband" and "Wife" are field names from the template. Use gender-neutral language with the client — say "you" and "your spouse" rather than "husband/wife."
+
+=== SECTION 3: CHILDREN ===
+"Now let's talk about your children. Please share the full legal name and date of birth for each of your children."
+
+After collecting:
+- Display children in format: Name, DOB: Month Day, Year (age X) — one per line
+- Auto-calculate each child's age. If any child is under 18: FLAG "MINOR CHILD: [child name] DOB [date]. Guardian provisions required."
+- Ask: "How many children is that total?" (to confirm Number_of_kids)
+
+Collect: NAMES_OF_ALL_CHILDREN (all children listed), Number_of_kids
+
+=== SECTION 4: SPECIAL NEEDS CHILD ===
+Transition warmly and sensitively:
+
+"Now I'd like to ask about the child this Special Needs Trust is designed to protect. This trust is created specifically so that your child can receive supplemental benefits from the trust without losing eligibility for government programs like Medicaid, SSI, or other assistance.
+
+Which of your children will be the beneficiary of the Special Needs Trust?"
+
+After they identify the child:
+- Confirm the child's full legal name (this becomes SNC_NAME / SNC_First_Name)
+- Ask: "Is [child name] your son or daughter?" (for sondaughter field)
+- Based on answer, derive pronoun fields: SN_hisher (his/her/their), SN_heshe (he/she/they)
+
+Then ask about government benefits:
+"Does [child name] currently receive any government benefits? For example, Medicaid, SSI (Supplemental Security Income), SSDI, Section 8 housing, or other programs? Just let me know which ones — this helps your attorney ensure the trust is set up to protect those benefits."
+
+FLAG: "GOVERNMENT BENEFITS: [child name] currently receives: [list of benefits]. Ensure SNT provisions preserve eligibility."
+
+If they say none or unsure: FLAG: "GOVERNMENT BENEFITS: Client unsure or child not yet receiving benefits. Attorney to discuss benefit eligibility and preservation strategy."
+
+Collect: SNC_NAME (full legal name), SNC_First_Name (first name only), sondaughter ("son" or "daughter"), SN_hisher, SN_heshe, Government_Benefits_Notes
+
+=== SECTION 5: TRUST DETAILS ===
+Explain the trust briefly:
+
+"Your estate plan centers on a revocable living trust — it holds your assets, keeps them out of probate, and ensures your wishes are carried out privately. Both of you will serve as the trustors (creators) and trustees (managers) of the trust during your lifetimes. Nothing changes about how you manage your money or property.
+
+The trust also includes a Special Needs Trust section specifically for [SNC_First_Name]. This section ensures that any assets set aside for [SNC_First_Name] are managed by a trustee — not given directly — so they supplement government benefits rather than replacing them."
+
+Ask: "Most families name their trust something like 'The [Last Name] Family Trust.' Would you like to go with that, or do you have a different name in mind?"
+
+Then ask about the Special Needs Trust name: "The Special Needs Trust section within your trust also gets its own name. A common choice would be 'The [SNC_First_Name] [Last Name] Special Needs Trust.' Would you like to use that, or something different?"
+
+Collect: NAME_OF_TRUST, SNT_NAME
+
+=== SECTION 6: SUCCESSOR TRUSTEE ===
+"Now let's talk about who steps in after both of you have passed away or if you both become incapacitated. This person is your successor trustee — they'll manage and distribute your trust assets according to your wishes.
+
+For the main trust, your successor trustee will also serve as the personal representative of your estate.
+
+For [SNC_First_Name]'s Special Needs Trust, the successor trustee has an especially important role — they'll manage [SNC_First_Name]'s trust assets carefully, making sure distributions supplement but never replace government benefits. This requires someone who is responsible, organized, and willing to work with a benefits advisor.
+
+You can name the same person for both roles, or different people. Who would you like as your:
+— First choice successor trustee (for the main trust)?
+— Backup successor trustee?
+
+And for [SNC_First_Name]'s Special Needs Trust:
+— First choice SNT trustee?
+— Backup SNT trustee?"
+
+If they want the same person for both: that's fine, note it.
+If different: collect separately.
+
+After collecting, ask about the trustee succession clause: "Your trust also includes a provision for what happens if all your named trustees are unavailable. It will say that a majority of your living and competent [children/beneficiaries] can appoint a new trustee in writing. Does that work for you?"
+
+Collect: AgentSuccessor_Trustee (main successor trustee — also used as SNT trustee unless different), ALTERNATE_AGENT (backup), Trustee_heshe (pronoun for main successor trustee), and_then_whomsoever_a_majority_of_the_t (the remainder text, typically "children" or "beneficiaries")
+
+FLAG if SNT trustee differs from main successor trustee: "DIFFERENT SNT TRUSTEE: Main successor trustee is [name]. SNT trustee is [name]. Verify Article 8 trustee appointment matches."
+
+=== SECTION 7: GUARDIAN ===
+"If you have minor or incapacitated children at the time of your passing, someone will need to serve as their guardian — the person legally responsible for their care. By default, your successor trustees would serve in this role.
+
+Would you like [successor trustee name] and [backup name] to also serve as guardians, or would you prefer to name different people?"
+
+If different: collect names and contact info.
+FLAG: "DIFFERENT GUARDIANS: [names]. Update guardian merge fields."
+
+Collect: Guardian_Name (if different from successor trustee)
+
+=== SECTION 8: BENEFICIARIES & DISTRIBUTION ===
+"Now let's talk about how your assets are distributed after both of you have passed.
+
+Your trust is set up so that when the first spouse passes, everything goes to the surviving spouse automatically. After both of you have passed, the trust divides into separate shares.
+
+For [SNC_First_Name], assets go into the Special Needs Trust and are managed by the SNT trustee for [SNC_First_Name]'s benefit throughout [his/her/their] lifetime.
+
+For your other children, their shares are distributed outright or held in trust until they reach a certain age.
+
+A few questions:
+— Would you like all children (other than [SNC_First_Name]) to receive equal shares?
+— At what age should they receive their inheritance outright? (Common choices are 21, 25, or 30)
+— Is there a specific dollar amount you'd like set aside for [SNC_First_Name]'s Special Needs Trust, or should it be an equal share like the other children?"
+
+After collecting:
+- FLAG if unequal distribution: "UNEQUAL DISTRIBUTION: [details]. Adjust trust provisions."
+- FLAG inheritance age: "INHERITANCE AGE: [age]. Ensure trust reflects this."
+- FLAG SNT funding: "SNT FUNDING: [specific amount or equal share]. Verify Paragraph 7.1 specific gift amount."
+
+=== SECTION 9: POUR-OVER WILLS ===
+"Your estate plan includes pour-over wills for both of you. These are safety nets — if any assets are accidentally left outside your trust, the wills catch them and pour them into the trust.
+
+Your successor trustees automatically serve as personal representatives for the wills, so we don't need to collect additional information for these. I just want to make sure you're aware they're included."
+
+No additional data collection needed — wills use the same successor trustee and children data.
+
+=== SECTION 10: FINANCIAL POWERS OF ATTORNEY ===
+"Next, let's set up your financial powers of attorney. Each of you will name the other as your primary agent — so if one of you becomes incapacitated, the other can handle finances, sign documents, manage accounts, and so on.
+
+For your backup agent (in case neither of you can serve), most couples name the same person as their successor trustee. Would you like to use [successor trustee name] as your backup financial POA agent, or someone different?"
+
+If different: collect full name and address for the backup.
+
+Collect: DPOA backup agent info (if different from successor trustee). Primary agents are automatically each spouse.
+
+=== SECTION 11: HEALTHCARE DIRECTIVES ===
+"Now let's set up your healthcare directives. Each of you gets one — it covers two things: naming a healthcare agent (who makes medical decisions if you can't), and your living will (your end-of-life care wishes).
+
+For healthcare agents, most couples name each other as primary agent. Would you like to do that?"
+
+If yes: primary agent for each spouse is the other spouse.
+
+"And who would you like as your backup healthcare agent? This can be the same for both of you, or different."
+
+Collect backup healthcare agent info for each spouse:
+- Alternate_Agent_Name, Alternate_Agent_Address, Alternate_Agent_City, Alternate_Agent_State, Alternate_Agent_Zip, Alternate_Agent_Cell_Phone, Alternate_Agent_Work_Phone
+
+Then the living will for EACH spouse:
+"Now for the living will portion. Utah law gives you four options for end-of-life care:
+
+1. Let my agent decide — you trust your agent to make the right call
+2. Prolong life — every medically appropriate effort to keep you alive
+3. Do not prolong life — comfort care only, no life-prolonging treatment
+4. No preference — you'd rather not specify right now
+
+[First spouse name], which option reflects your wishes?"
+
+After collecting, ask the same for the second spouse.
+
+Do not populate living will choices in documents.
+FLAG: "LIVING WILL — [Spouse 1 name]: Option [X]. [Spouse 2 name]: Option [X]. Clients to initial at signing. If Option 3: attorney to discuss additional detail at signing."
+
+Then medical research and organ donation for EACH spouse:
+"Two final questions for each of you:
+— Would you like to participate in medical research or clinical trials? (Yes / No / Discuss with attorney)
+— Would you like to include organ donation? (Yes / No / Discuss with attorney)"
+
+Do not populate in document.
+FLAG: "[Spouse 1]: MEDICAL RESEARCH: [answer]. ORGAN DONATION: [answer]. [Spouse 2]: MEDICAL RESEARCH: [answer]. ORGAN DONATION: [answer]. Clients to initial at signing."
+
+=== SECTION 12: FINAL CONFIRMATION ===
+Display a complete organized summary grouped by topic. Include:
+1. Both spouses' personal information
+2. Children (with SNT beneficiary highlighted)
+3. Trust names (main trust and SNT)
+4. Successor trustees (main and SNT)
+5. Guardians
+6. Distribution plan
+7. Pour-over wills (note: included, using same trustee info)
+8. Financial POA agents (primary and backup for each spouse)
+9. Healthcare agents (primary and backup for each spouse)
+10. Living will choices for each spouse
+11. Medical research / organ donation for each spouse
+
+Ask: "Does everything look right, or would you like to change anything?"
+If changes: fix, redisplay, ask again. Repeat until confirmed.
+
+When confirmed, send this closing message:
+
+"Your intake is complete — thank you for taking the time to do this. Here is what happens next:
+
+1. Your attorney will review all of your information
+2. Your draft documents will be prepared and sent to you for review
+3. Your attorney will reach out to schedule your signing appointment
+
+⚠️ IMPORTANT: Your draft documents will contain sections that need to be completed at your signing appointment. Please do not sign any documents until you have reviewed them with your attorney and all blanks have been filled in.
+
+If you have any questions in the meantime:
+📞 801-899-3704
+🌐 flexlegalteam.com
+
+Thank you for choosing Flex Legal Services. We look forward to working with you and your family!"
+
+Then on a new line output exactly: [INTAKE_COMPLETE]
+Then immediately output the JSON object:
+
+{
+  "Trust_Type": "snt",
+  "Husbands_first_name": "",
+  "Wifes_first_name": "",
+  "LAST_NAME": "",
+  "his_preferred_signature_name": "",
+  "her_preferred_signature_name": "",
+  "HIS_PREFERRED_SIGNATURE_NAME": "",
+  "HER_PREFERRED_SIGNATURE_NAME": "",
+  "HUSBANDS_FIRST_NAME": "",
+  "WIFES_FIRST_NAME": "",
+  "Address": "",
+  "City": "",
+  "State": "",
+  "Zip_Code": "",
+  "County": "",
+  "His_Birth_Date": "",
+  "Her_Birth_Date": "",
+  "His_Cell_Phone": "",
+  "His_Work_Phone": "",
+  "Her_Cell_Phone": "",
+  "Her_Work_Phone": "",
+  "NAMES_OF_ALL_CHILDREN": "",
+  "Number_of_kids": "",
+  "SNC_NAME": "",
+  "SNC_First_Name": "",
+  "sondaughter": "",
+  "SN_hisher": "",
+  "SN_heshe": "",
+  "Government_Benefits_Notes": "",
+  "NAME_OF_TRUST": "",
+  "SNT_NAME": "",
+  "SNT_Name": "",
+  "Trust_Date": "",
+  "AgentSuccessor_Trustee": "",
+  "AGENTSUCCESSOR_TRUSTEE": "",
+  "Trustee_heshe": "",
+  "ALTERNATE_AGENT": "",
+  "and_then_whomsoever_a_majority_of_the_t": "",
+  "Guardian_Name": "",
+  "Inheritance_Age": "",
+  "SNT_Funding": "",
+  "DPOA_Backup_Agent": "",
+  "Alternate_Agent_Name": "",
+  "Alternate_Agent_Address": "",
+  "Alternate_Agent_City": "",
+  "Alternate_Agent_State": "",
+  "Alternate_Agent_Zip": "",
+  "Alternate_Agent_Cell_Phone": "",
+  "Alternate_Agent_Work_Phone": "",
+  "Husband_Living_Will": "",
+  "Wife_Living_Will": "",
+  "Husband_Medical_Research": "",
+  "Husband_Organ_Donation": "",
+  "Wife_Medical_Research": "",
+  "Wife_Organ_Donation": "",
+  "Attorney_Flags": ""
+}
+
+CRITICAL JSON FIELD NOTES:
+- HIS_PREFERRED_SIGNATURE_NAME and HUSBANDS_FIRST_NAME must be UPPERCASE versions of the corresponding lowercase fields
+- HER_PREFERRED_SIGNATURE_NAME and WIFES_FIRST_NAME must be UPPERCASE versions too
+- SNT_Name is title case; SNT_NAME is uppercase — populate both with the same value
+- Trust_Date: leave empty — attorney fills this at signing
+- AGENTSUCCESSOR_TRUSTEE is uppercase of AgentSuccessor_Trustee
+- and_then_whomsoever_a_majority_of_the_t: typically "children" or "descendants" — the word that completes the sentence "whomsoever a majority of the Trustors' living and competent [___] shall appoint"
+
+Attorney_Flags: all flags as a single string separated by " | "`;
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SYSTEM PROMPT — STANDALONE DOCUMENTS (POA / WILL / HCD)
 // ─────────────────────────────────────────────────────────────────────────────
 const STANDALONE_SYSTEM_PROMPT = `You are the estate planning intake assistant for Flex Legal Services LLC, a Utah and Idaho licensed law firm. You are conducting an attorney-directed intake on behalf of Flex Legal Services Attorneys. Everything collected is protected under attorney-client privilege.
@@ -1050,6 +1363,7 @@ function getSystemPrompt(trustType) {
   if (trustType === 'single') return SINGLE_TRUST_SYSTEM_PROMPT;
   if (trustType === 'standalone') return STANDALONE_SYSTEM_PROMPT;
   if (trustType === 'selfservice') return SELFSERVICE_SYSTEM_PROMPT;
+  if (trustType === 'snt') return SNT_SYSTEM_PROMPT;
   return SYSTEM_PROMPT;
 }
 
@@ -1110,6 +1424,25 @@ app.post('/start-standalone', async (req, res) => {
   }
 });
 
+// ─── Start — Special Needs Trust ────────────────────────────────────────────
+app.post('/start-sns', async (req, res) => {
+  try {
+    const { clientInfo, selectedPackage } = req.body;
+    const firstName = clientInfo && clientInfo.name ? clientInfo.name.split(' ')[0] : 'there';
+
+    const bubble1 = `Welcome to Flex Legal Services, ${firstName}! I'm here to help gather the information your attorney needs to prepare your Special Needs Trust estate plan. This is a comprehensive package that protects your loved one with a disability while preserving their eligibility for government benefits.\n\nEverything you share is confidential and protected under attorney-client privilege.`;
+
+    const bubble2 = `Before we begin, we have a helpful FAQ document that explains how special needs trusts work, why they matter, and answers common questions. You can download it here:\n\n📄 <a href="/faq_special_needs.pdf" target="_blank" style="color:#C9A84C; text-decoration:underline; font-weight:600;">Special Needs Estate Planning FAQ</a>\n\nFeel free to review it now or save it for later — either way, I'll explain everything as we go.\n\nA few things to keep in mind:\n— Your answers will be reviewed by your attorney before any documents are finalized\n— This is not legal advice — it's an intake process to gather your information\n— If you're unsure about anything, just say so and we'll make a note for your attorney\n\nAre you ready to get started?`;
+
+    const combinedForHistory = `${bubble1}\n\n${bubble2}`;
+
+    res.json({ bubble1, bubble2, combinedForHistory });
+  } catch (err) {
+    console.error('Start-sns error:', err);
+    res.status(500).json({ error: 'Failed to start conversation' });
+  }
+});
+
 // ─── Start — Self-Service Document Builder ────────────────────────────────────
 app.post('/start-selfservice', async (req, res) => {
   try {
@@ -1161,6 +1494,8 @@ app.post('/chat', async (req, res) => {
         generateAndEmailStandalone(intakeData).catch(err => console.error('Standalone doc gen error:', err));
       } else if (trustType === 'selfservice') {
         generateAndEmailSelfService(intakeData).catch(err => console.error('Self-service doc gen error:', err));
+      } else if (trustType === 'snt') {
+        generateAndEmailSNT(intakeData).catch(err => console.error('SNT doc gen error:', err));
       } else {
         generateAndEmail(intakeData).catch(err => console.error('Doc gen error:', err));
       }
@@ -1215,6 +1550,8 @@ app.post('/chat-stream', async (req, res) => {
             generateAndEmailStandalone(intakeData).catch(err => console.error('Standalone doc gen error:', err));
           } else if (trustType === 'selfservice') {
             generateAndEmailSelfService(intakeData).catch(err => console.error('Self-service doc gen error:', err));
+          } else if (trustType === 'snt') {
+            generateAndEmailSNT(intakeData).catch(err => console.error('SNT doc gen error:', err));
           } else {
             generateAndEmail(intakeData).catch(err => console.error('Doc gen error:', err));
           }
@@ -1503,6 +1840,195 @@ async function generateAndEmailStandalone(data) {
   }
 
   await sendEmailStandalone(data, attachments);
+}
+
+// ─── Document generation — Special Needs Trust (Married) ─────────────────────
+async function generateAndEmailSNT(data) {
+  const templatePath = path.join(__dirname, 'templates', 'snt_married.docx');
+  if (!fs.existsSync(templatePath)) { console.error('SNT template not found'); return; }
+
+  const content = fs.readFileSync(templatePath, 'binary');
+  const zip = new PizZip(content);
+
+  const lastName = data.LAST_NAME || 'Client';
+  const mergeData = {
+    // Spouse 1 (husband in template terms)
+    Husbands_first_name:              data.Husbands_first_name || '',
+    HUSBANDS_FIRST_NAME:              data.HUSBANDS_FIRST_NAME || (data.Husbands_first_name || '').toUpperCase(),
+    his_preferred_signature_name:     data.his_preferred_signature_name || '',
+    HIS_PREFERRED_SIGNATURE_NAME:     data.HIS_PREFERRED_SIGNATURE_NAME || (data.his_preferred_signature_name || '').toUpperCase(),
+    // Spouse 2 (wife in template terms)
+    Wifes_first_name:                 data.Wifes_first_name || '',
+    WIFES_FIRST_NAME:                 data.WIFES_FIRST_NAME || (data.Wifes_first_name || '').toUpperCase(),
+    her_preferred_signature_name:     data.her_preferred_signature_name || '',
+    HER_PREFERRED_SIGNATURE_NAME:     data.HER_PREFERRED_SIGNATURE_NAME || (data.her_preferred_signature_name || '').toUpperCase(),
+    // Shared
+    LAST_NAME:                        data.LAST_NAME || '',
+    Address:                          data.Address || '',
+    City:                             data.City || '',
+    State:                            data.State || 'Utah',
+    Zip_Code:                         data.Zip_Code || '',
+    County:                           data.County || '',
+    // Trust
+    NAME_OF_TRUST:                    data.NAME_OF_TRUST || `The ${lastName} Family Trust`,
+    Name_of_Trust:                    data.NAME_OF_TRUST || `The ${lastName} Family Trust`,
+    Trust_Date:                       data.Trust_Date || '',
+    // Special Needs Trust
+    SNT_NAME:                         data.SNT_NAME || '',
+    SNT_Name:                         data.SNT_Name || data.SNT_NAME || '',
+    SNC_NAME:                         data.SNC_NAME || '',
+    SNC_First_Name:                   data.SNC_First_Name || '',
+    sondaughter:                      data.sondaughter || '',
+    SN_hisher:                        data.SN_hisher || '',
+    SN_heshe:                         data.SN_heshe || '',
+    // Children
+    NAMES_OF_ALL_CHILDREN:            data.NAMES_OF_ALL_CHILDREN || '',
+    Number_of_kids:                   data.Number_of_kids || '',
+    // Trustees
+    AgentSuccessor_Trustee:           data.AgentSuccessor_Trustee || '',
+    AGENTSUCCESSOR_TRUSTEE:           data.AGENTSUCCESSOR_TRUSTEE || (data.AgentSuccessor_Trustee || '').toUpperCase(),
+    Trustee_heshe:                    data.Trustee_heshe || '',
+    ALTERNATE_AGENT:                  data.ALTERNATE_AGENT || '',
+    and_then_whomsoever_a_majority_of_the_t: data.and_then_whomsoever_a_majority_of_the_t || 'children',
+    // Healthcare directive
+    Alternate_Agent_Name:             data.Alternate_Agent_Name || '',
+    Alternate_Agent_Address:          data.Alternate_Agent_Address || '',
+    Alternate_Agent_City:             data.Alternate_Agent_City || '',
+    Alternate_Agent_State:            data.Alternate_Agent_State || '',
+    Alternate_Agent_Zip:              data.Alternate_Agent_Zip || '',
+    Alternate_Agent_Cell_Phone:       data.Alternate_Agent_Cell_Phone || '',
+    Alternate_Agent_Work_Phone:       data.Alternate_Agent_Work_Phone || 'N/A',
+  };
+
+  // Process headers/footers first
+  Object.keys(zip.files).forEach(filename => {
+    if (
+      (filename.startsWith('word/footer') || filename.startsWith('word/header')) &&
+      filename.endsWith('.xml')
+    ) {
+      try {
+        let fileContent = zip.files[filename].asText();
+        Object.entries(mergeData).forEach(([key, value]) => {
+          fileContent = fileContent.replace(new RegExp(`\u00ABr${key}\u00BB`, 'g'), value || '___________');
+          fileContent = fileContent.replace(new RegExp(`\u00AB${key}\u00BB`, 'g'), value || '___________');
+        });
+        zip.file(filename, fileContent);
+      } catch (e) { /* skip binary files */ }
+    }
+  });
+
+  const doc = new Docxtemplater(zip, {
+    paragraphLoop: true,
+    linebreaks: true,
+    delimiters: { start: '\u00AB', end: '\u00BB' },
+    nullGetter: () => '___________',
+  });
+
+  doc.render(mergeData);
+
+  const buf = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
+  const dateStr = new Date().toISOString().slice(0,10);
+  const filename = `${lastName.replace(/\s+/g,'_')}_SNT_Estate_Plan_Draft_${dateStr}.docx`;
+
+  // Use the joint trust email format since this is also a married couple package
+  await sendEmailSNT(data, buf, filename);
+}
+
+// ─── Email — SNT ──────────────────────────────────────────────────────────────
+async function sendEmailSNT(data, docBuffer, filename) {
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD }
+  });
+
+  const clientName = `${data.Husbands_first_name || ''} & ${data.Wifes_first_name || ''} ${data.LAST_NAME || ''}`.trim();
+  const submitted  = new Date().toLocaleString('en-US', { timeZone: 'America/Denver' });
+  const flags = data.Attorney_Flags
+    ? data.Attorney_Flags.split(' | ').map(f => `  ⚑ ${f}`).join('\n')
+    : '  None';
+
+  const emailBody = `
+New Special Needs Trust estate planning intake completed — ready for attorney review.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CLIENT INFORMATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Clients:        ${clientName}
+Package:        Special Needs Trust (Married)
+Submitted:      ${submitted} (Mountain Time)
+Address:        ${data.Address || ''}, ${data.City || ''}, ${data.State || ''} ${data.Zip_Code || ''}
+County:         ${data.County || ''}
+
+Spouse 1:       ${data.his_preferred_signature_name || ''} (DOB: ${data.His_Birth_Date || ''})
+  Cell:         ${data.His_Cell_Phone || ''}
+  Work:         ${data.His_Work_Phone || 'N/A'}
+
+Spouse 2:       ${data.her_preferred_signature_name || ''} (DOB: ${data.Her_Birth_Date || ''})
+  Cell:         ${data.Her_Cell_Phone || ''}
+  Work:         ${data.Her_Work_Phone || 'N/A'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SPECIAL NEEDS CHILD
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Name:           ${data.SNC_NAME || ''}
+Relationship:   ${data.sondaughter || ''}
+Gov Benefits:   ${data.Government_Benefits_Notes || 'Not specified'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TRUST DETAILS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Trust Name:     ${data.NAME_OF_TRUST || ''}
+SNT Name:       ${data.SNT_NAME || ''}
+All Children:   ${data.NAMES_OF_ALL_CHILDREN || ''}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SUCCESSOR TRUSTEES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+First Choice:   ${data.AgentSuccessor_Trustee || ''}
+Backup:         ${data.ALTERNATE_AGENT || ''}
+Guardian:       ${data.Guardian_Name || 'Same as successor trustee'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HEALTHCARE DIRECTIVES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Backup HC Agent:      ${data.Alternate_Agent_Name || ''}
+Spouse 1 Living Will: Option ${data.Husband_Living_Will || 'Not selected'}
+Spouse 2 Living Will: Option ${data.Wife_Living_Will || 'Not selected'}
+Spouse 1 Research:    ${data.Husband_Medical_Research || 'N/A'}
+Spouse 1 Organ:       ${data.Husband_Organ_Donation || 'N/A'}
+Spouse 2 Research:    ${data.Wife_Medical_Research || 'N/A'}
+Spouse 2 Organ:       ${data.Wife_Organ_Donation || 'N/A'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DISTRIBUTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Inheritance Age:  ${data.Inheritance_Age || 'Not specified'}
+SNT Funding:      ${data.SNT_Funding || 'Not specified'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ATTORNEY FLAGS — ACTION REQUIRED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${flags}
+
+Draft document attached: ${filename}
+— Flex Legal Services Attorneys Intake System
+  `.trim();
+
+  const subject = `[INTAKE] ${clientName} — Special Needs Trust — Review Required`;
+
+  await transporter.sendMail({
+    from: `"Flex Legal Intake" <${GMAIL_USER}>`,
+    to: NOTIFY_EMAIL,
+    subject,
+    text: emailBody,
+    attachments: [{
+      filename,
+      content: docBuffer,
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    }]
+  });
+
+  console.log(`Email sent: ${clientName} — SNT estate plan`);
 }
 
 // ─── Email — Standalone ───────────────────────────────────────────────────────
@@ -2003,7 +2529,7 @@ app.get('/api/intakes/:id/download/:docType', (req, res) => {
   const row = stmt.getAsObject();
   stmt.free();
   const data = JSON.parse(row.intake_data || '{}');
-  const lastName = data.Your_Last_Name || 'Client';
+  const lastName = data.Your_Last_Name || data.LAST_NAME || 'Client';
   const dateStr = new Date(row.created_at).toISOString().slice(0, 10);
   const docType = req.params.docType;
 
@@ -2022,6 +2548,7 @@ app.get('/api/intakes/:id/download/:docType', (req, res) => {
     templateFile = row.trust_type === 'selfservice' ? 'hcd_selfservice.docx' : 'hcd_standalone.docx';
     docLabel = 'HCD';
   }
+  else if (docType === 'snt') { templateFile = 'snt_married.docx'; docLabel = 'SNT_Estate_Plan'; }
   else { return res.status(400).json({ error: 'Unknown document type' }); }
 
   const templatePath = path.join(__dirname, 'templates', templateFile);
