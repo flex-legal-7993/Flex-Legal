@@ -29,6 +29,7 @@ const ANTHROPIC_API_KEY  = process.env.ANTHROPIC_API_KEY;
 const GMAIL_USER         = process.env.GMAIL_USER;
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
 const NOTIFY_EMAIL       = process.env.NOTIFY_EMAIL;
+const FIRM_NAME          = process.env.FIRM_NAME || 'Flex Legal Services';
 
 const EMAIL_ENABLED = !!(GMAIL_USER && GMAIL_APP_PASSWORD);
 if (!EMAIL_ENABLED) console.log('⚠️  Email disabled — GMAIL_USER or GMAIL_APP_PASSWORD not set');
@@ -2949,6 +2950,11 @@ app.post('/api/intakes/:id/generate', requireAuth, (req, res) => {
 // Serve dashboard (protected)
 app.get('/dashboard', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
+// Public config endpoint (no auth required) — used by all pages for branding
+app.get('/api/config', (req, res) => {
+  res.json({ firmName: FIRM_NAME });
 });
 
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));

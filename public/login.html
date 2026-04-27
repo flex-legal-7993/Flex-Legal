@@ -180,7 +180,7 @@
 
 <div class="login-container">
   <div class="login-header">
-    <div class="login-logo">Flex Legal Services</div>
+    <div class="login-logo" id="loginLogo">Flex Legal Services</div>
     <div class="login-subtitle">Attorney Dashboard</div>
   </div>
 
@@ -290,6 +290,23 @@ async function handleSubmit(e) {
 fetch('/api/auth/me').then(r => r.json()).then(data => {
   if (data.authenticated) window.location.href = '/dashboard';
 });
+
+// White label branding
+(async function applyBranding() {
+  try {
+    const resp = await fetch('/api/config');
+    const config = await resp.json();
+    const firm = config.firmName || 'Flex Legal Services';
+    if (firm !== 'Flex Legal Services') {
+      document.getElementById('loginLogo').textContent = firm;
+      document.title = 'Attorney Login — ' + firm;
+    }
+  } catch (e) {}
+  const footer = document.createElement('div');
+  footer.style.cssText = 'position:fixed;bottom:0;left:0;right:0;text-align:center;padding:6px 0;font-size:11px;color:#9a948e;background:rgba(250,248,244,0.95);border-top:1px solid #ddd8d0;z-index:50;font-family:Source Sans 3,sans-serif;';
+  footer.innerHTML = 'Powered by <span style="font-weight:600;color:#0F3D6B;">Casefly</span>';
+  document.body.appendChild(footer);
+})();
 </script>
 </body>
 </html>

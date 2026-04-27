@@ -1928,5 +1928,36 @@ chatInput.addEventListener('input', resizeChatInput);
 sendBtn.addEventListener('click', sendMessage);
 chatInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
 </script>
+
+<script>
+// ─── White Label Branding ────────────────────────────────────────────────────
+(async function applyBranding() {
+  try {
+    const resp = await fetch('/api/config');
+    const config = await resp.json();
+    const firm = config.firmName || 'Flex Legal Services';
+    if (firm === 'Flex Legal Services') return; // default, no changes needed
+
+    // Update page title
+    document.title = document.title.replace('Flex Legal Services', firm);
+
+    // Update all text content in the page that references "Flex Legal Services"
+    function walkText(node) {
+      if (node.nodeType === 3 && node.textContent.includes('Flex Legal')) {
+        node.textContent = node.textContent.replace(/Flex Legal Services LLC/g, firm).replace(/Flex Legal Services Attorneys/g, firm).replace(/Flex Legal Services/g, firm).replace(/Flex Legal Intake/g, firm + ' Intake').replace(/Flex Legal/g, firm);
+      } else {
+        node.childNodes.forEach(walkText);
+      }
+    }
+    walkText(document.body);
+  } catch (e) { /* ignore — default branding stays */ }
+
+  // Add Powered by Casefly footer
+  const footer = document.createElement('div');
+  footer.style.cssText = 'position:fixed;bottom:0;left:0;right:0;text-align:center;padding:6px 0;font-size:11px;color:#9a948e;background:rgba(250,248,244,0.95);border-top:1px solid #ddd8d0;z-index:50;font-family:Source Sans 3,sans-serif;';
+  footer.innerHTML = 'Powered by <span style="font-weight:600;color:#0F3D6B;">Casefly</span>';
+  document.body.appendChild(footer);
+})();
+</script>
 </body>
 </html>
