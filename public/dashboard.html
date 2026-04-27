@@ -1071,7 +1071,7 @@ function renderColumn(colId, items, countId) {
         <div class="card-avatar">${initials}</div>
         <div class="card-info">
           <div class="card-name">${escape(intake.client_name)}</div>
-          <div class="card-email">${escape(intake.client_email || '')}</div>
+          <div class="card-email">${escape(intake.package_type.replace('Complete Estate Plan — ', '').replace('Attorney-Directed Documents', 'Attorney-Directed'))}</div>
         </div>
         <div class="card-right">
           ${signingPill}
