@@ -11,10 +11,18 @@ const Docxtemplater = require('docxtemplater');
 const fs        = require('fs');
 const path      = require('path');
 const initSqlJs = require('sql.js');
+const bcrypt    = require('bcryptjs');
+const session   = require('express-session');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'flex-legal-dev-secret-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { maxAge: 24 * 60 * 60 * 1000 } // 24 hours
+}));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const ANTHROPIC_API_KEY  = process.env.ANTHROPIC_API_KEY;
@@ -59,6 +67,14 @@ async function initDatabase() {
     notes TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS attorneys (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    firm_name TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
   )`);
   // Seed sample clients if database is empty
   const count = db.exec('SELECT COUNT(*) FROM intakes');
@@ -2578,11 +2594,102 @@ Document sent directly to client.
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DASHBOARD API
+// AUTHENTICATION
+// ─────────────────────────────────────────────────────────────────────────────
+
+function requireAuth(req, res, next) {
+  if (req.session && req.session.attorneyId) return next();
+  // For API routes, return 401; for page routes, redirect to login
+  if (req.path.startsWith('/api/')) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  return res.redirect('/login');
+}
+
+// Serve login page
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+// Register
+app.post('/api/auth/register', async (req, res) => {
+  const { email, password, firmName } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  if (!db) return res.status(503).json({ error: 'Database not ready' });
+
+  try {
+    // Check if email exists
+    const existing = db.exec('SELECT id FROM attorneys WHERE email = ?', [email.toLowerCase()]);
+    if (existing.length && existing[0].values.length) {
+      return res.status(409).json({ error: 'An account with this email already exists' });
+    }
+
+    const hash = await bcrypt.hash(password, 10);
+    db.run('INSERT INTO attorneys (email, password_hash, firm_name) VALUES (?, ?, ?)', [email.toLowerCase(), hash, firmName || '']);
+    saveDatabase();
+
+    // Auto-login after registration
+    const result = db.exec('SELECT id, email, firm_name FROM attorneys WHERE email = ?', [email.toLowerCase()]);
+    const attorney = result[0].values[0];
+    req.session.attorneyId = attorney[0];
+    req.session.attorneyEmail = attorney[1];
+    req.session.firmName = attorney[2];
+
+    res.json({ success: true, email: attorney[1] });
+  } catch (err) {
+    console.error('Registration error:', err);
+    res.status(500).json({ error: 'Registration failed' });
+  }
+});
+
+// Login
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  if (!db) return res.status(503).json({ error: 'Database not ready' });
+
+  try {
+    const result = db.exec('SELECT id, email, password_hash, firm_name FROM attorneys WHERE email = ?', [email.toLowerCase()]);
+    if (!result.length || !result[0].values.length) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    const [id, dbEmail, hash, firmName] = result[0].values[0];
+    const match = await bcrypt.compare(password, hash);
+    if (!match) return res.status(401).json({ error: 'Invalid email or password' });
+
+    req.session.attorneyId = id;
+    req.session.attorneyEmail = dbEmail;
+    req.session.firmName = firmName;
+
+    res.json({ success: true, email: dbEmail });
+  } catch (err) {
+    console.error('Login error:', err);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// Logout
+app.post('/api/auth/logout', (req, res) => {
+  req.session.destroy();
+  res.json({ success: true });
+});
+
+// Check auth status
+app.get('/api/auth/me', (req, res) => {
+  if (req.session && req.session.attorneyId) {
+    return res.json({ authenticated: true, email: req.session.attorneyEmail, firmName: req.session.firmName });
+  }
+  res.json({ authenticated: false });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DASHBOARD API (protected)
 // ─────────────────────────────────────────────────────────────────────────────
 
 // List all intakes
-app.get('/api/intakes', (req, res) => {
+app.get('/api/intakes', requireAuth, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Database not ready' });
   const result = db.exec('SELECT id, client_name, client_email, client_phone, package_type, trust_type, documents, status, notes, created_at, updated_at FROM intakes ORDER BY created_at DESC');
   if (!result.length) return res.json([]);
@@ -2597,7 +2704,7 @@ app.get('/api/intakes', (req, res) => {
 });
 
 // Get single intake with full data
-app.get('/api/intakes/:id', (req, res) => {
+app.get('/api/intakes/:id', requireAuth, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Database not ready' });
   const stmt = db.prepare('SELECT * FROM intakes WHERE id = ?');
   stmt.bind([parseInt(req.params.id)]);
@@ -2610,7 +2717,7 @@ app.get('/api/intakes/:id', (req, res) => {
 });
 
 // Update intake (status, notes)
-app.patch('/api/intakes/:id', (req, res) => {
+app.patch('/api/intakes/:id', requireAuth, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Database not ready' });
   const { status, notes } = req.body;
   const id = parseInt(req.params.id);
@@ -2625,7 +2732,7 @@ app.patch('/api/intakes/:id', (req, res) => {
 });
 
 // Re-generate and download a document
-app.get('/api/intakes/:id/download/:docType', (req, res) => {
+app.get('/api/intakes/:id/download/:docType', requireAuth, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Database not ready' });
   const stmt = db.prepare('SELECT * FROM intakes WHERE id = ?');
   stmt.bind([parseInt(req.params.id)]);
@@ -2746,7 +2853,7 @@ app.get('/api/intakes/:id/download/:docType', (req, res) => {
 });
 
 // ─── Update intake fields (attorney edits before generating docs) ─────────────
-app.patch('/api/intakes/:id/fields', (req, res) => {
+app.patch('/api/intakes/:id/fields', requireAuth, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Database not ready' });
   const id = parseInt(req.params.id);
   const updates = req.body.fields; // { fieldName: newValue, ... }
@@ -2773,7 +2880,7 @@ app.patch('/api/intakes/:id/fields', (req, res) => {
 });
 
 // ─── Generate document on demand (attorney clicks Generate) ──────────────────
-app.post('/api/intakes/:id/generate', (req, res) => {
+app.post('/api/intakes/:id/generate', requireAuth, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Database not ready' });
   const stmt = db.prepare('SELECT * FROM intakes WHERE id = ?');
   stmt.bind([parseInt(req.params.id)]);
@@ -2839,8 +2946,8 @@ app.post('/api/intakes/:id/generate', (req, res) => {
   }
 });
 
-// Serve dashboard
-app.get('/dashboard', (req, res) => {
+// Serve dashboard (protected)
+app.get('/dashboard', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
@@ -2870,7 +2977,7 @@ TRUST TYPES IN THIS SYSTEM:
 - Special Needs Trust (SNT): Third-party SNT embedded in a revocable trust for married couples with a disabled child
 - Last Will (self-service): Simplified will package — auto-generated, no attorney review`;
 
-app.post('/api/dashboard-chat', async (req, res) => {
+app.post('/api/dashboard-chat', requireAuth, async (req, res) => {
   const { messages, intakeId } = req.body;
 
   if (!messages || !Array.isArray(messages)) {

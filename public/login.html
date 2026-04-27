@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attorney Login — Flex Legal Services</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=Source+Sans+3:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0F3D6B;
+    --navy-dark: #082a4d;
+    --navy-light: #1a5490;
+    --gold: #C9A84C;
+    --gold-light: #e8d5a3;
+    --cream: #FAF8F4;
+    --cream-dark: #F0EDE6;
+    --text: #1a1a1a;
+    --text-muted: #6b6560;
+    --border: #ddd8d0;
+    --white: #ffffff;
+    --danger: #991b1b;
+    --danger-bg: #fef2f2;
+    --success: #1a6b4a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Source Sans 3', sans-serif;
+    background: var(--cream);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .login-container {
+    width: 100%;
+    max-width: 420px;
+    padding: 20px;
+  }
+
+  .login-header {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .login-logo {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    color: var(--navy);
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .login-subtitle {
+    font-size: 14px;
+    color: var(--text-muted);
+  }
+
+  .login-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+  }
+
+  .login-tabs {
+    display: flex;
+    margin-bottom: 24px;
+    border-bottom: 2px solid var(--border);
+  }
+  .login-tab {
+    flex: 1;
+    padding: 10px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    font-family: 'Source Sans 3', sans-serif;
+  }
+  .login-tab.active {
+    color: var(--navy);
+    border-bottom-color: var(--gold);
+  }
+  .login-tab:hover:not(.active) { color: var(--navy); }
+
+  .form-group {
+    margin-bottom: 18px;
+  }
+  .form-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+  .form-group input {
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 15px;
+    font-family: 'Source Sans 3', sans-serif;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--white);
+    color: var(--text);
+    transition: border-color 0.2s;
+  }
+  .form-group input:focus {
+    outline: none;
+    border-color: var(--gold);
+  }
+
+  .login-btn {
+    width: 100%;
+    padding: 14px;
+    background: var(--navy);
+    color: var(--white);
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    font-family: 'Source Sans 3', sans-serif;
+    cursor: pointer;
+    transition: background 0.2s;
+    margin-top: 8px;
+  }
+  .login-btn:hover { background: var(--navy-light); }
+  .login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .error-msg {
+    background: var(--danger-bg);
+    color: var(--danger);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-bottom: 16px;
+    display: none;
+  }
+  .error-msg.show { display: block; }
+
+  .success-msg {
+    background: #e8f5ee;
+    color: var(--success);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-bottom: 16px;
+    display: none;
+  }
+  .success-msg.show { display: block; }
+
+  .register-fields { display: none; }
+  .register-fields.show { display: block; }
+
+  .login-footer {
+    text-align: center;
+    margin-top: 24px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .login-footer a {
+    color: var(--navy);
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .login-footer a:hover { color: var(--gold); }
+</style>
+</head>
+<body>
+
+<div class="login-container">
+  <div class="login-header">
+    <div class="login-logo">Flex Legal Services</div>
+    <div class="login-subtitle">Attorney Dashboard</div>
+  </div>
+
+  <div class="login-card">
+    <div class="login-tabs">
+      <button class="login-tab active" id="tabLogin" onclick="switchTab('login')">Sign In</button>
+      <button class="login-tab" id="tabRegister" onclick="switchTab('register')">Create Account</button>
+    </div>
+
+    <div class="error-msg" id="errorMsg"></div>
+    <div class="success-msg" id="successMsg"></div>
+
+    <form onsubmit="handleSubmit(event)">
+      <div class="register-fields" id="registerFields">
+        <div class="form-group">
+          <label>Firm Name</label>
+          <input type="text" id="firmName" placeholder="e.g., Smith & Associates">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Email Address</label>
+        <input type="email" id="email" placeholder="attorney@firm.com" required>
+      </div>
+
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="password" placeholder="Enter your password" required minlength="6">
+      </div>
+
+      <button type="submit" class="login-btn" id="submitBtn">Sign In</button>
+    </form>
+  </div>
+
+  <div class="login-footer">
+    <a href="/">Back to Client Intake</a>
+  </div>
+</div>
+
+<script>
+let mode = 'login'; // or 'register'
+
+function switchTab(tab) {
+  mode = tab;
+  document.getElementById('tabLogin').classList.toggle('active', tab === 'login');
+  document.getElementById('tabRegister').classList.toggle('active', tab === 'register');
+  document.getElementById('registerFields').classList.toggle('show', tab === 'register');
+  document.getElementById('submitBtn').textContent = tab === 'login' ? 'Sign In' : 'Create Account';
+  document.getElementById('errorMsg').classList.remove('show');
+  document.getElementById('successMsg').classList.remove('show');
+}
+
+async function handleSubmit(e) {
+  e.preventDefault();
+  const btn = document.getElementById('submitBtn');
+  const errorEl = document.getElementById('errorMsg');
+  const successEl = document.getElementById('successMsg');
+  errorEl.classList.remove('show');
+  successEl.classList.remove('show');
+
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+
+  if (!email || !password) {
+    errorEl.textContent = 'Please fill in all fields.';
+    errorEl.classList.add('show');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = mode === 'login' ? 'Signing in...' : 'Creating account...';
+
+  try {
+    const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
+    const body = { email, password };
+    if (mode === 'register') {
+      body.firmName = document.getElementById('firmName').value.trim();
+    }
+
+    const resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    const data = await resp.json();
+
+    if (resp.ok) {
+      successEl.textContent = mode === 'login' ? 'Welcome back! Redirecting...' : 'Account created! Redirecting...';
+      successEl.classList.add('show');
+      setTimeout(() => { window.location.href = '/dashboard'; }, 800);
+    } else {
+      errorEl.textContent = data.error || 'Something went wrong.';
+      errorEl.classList.add('show');
+      btn.disabled = false;
+      btn.textContent = mode === 'login' ? 'Sign In' : 'Create Account';
+    }
+  } catch (err) {
+    errorEl.textContent = 'Connection error. Please try again.';
+    errorEl.classList.add('show');
+    btn.disabled = false;
+    btn.textContent = mode === 'login' ? 'Sign In' : 'Create Account';
+  }
+}
+
+// If already logged in, redirect to dashboard
+fetch('/api/auth/me').then(r => r.json()).then(data => {
+  if (data.authenticated) window.location.href = '/dashboard';
+});
+</script>
+</body>
+</html>

@@ -751,6 +751,7 @@
   <div class="header-right">
     <input type="text" class="header-search" id="searchInput" placeholder="Search clients..." oninput="renderBoard()">
     <a href="/" class="header-link">Client Intake</a>
+    <a href="#" class="header-link" onclick="logout()" style="color:var(--gold-light);">Sign Out</a>
   </div>
 </div>
 
@@ -1354,6 +1355,11 @@ function resolveFlag(index) {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && currentDetailId) closeDetailPanel();
 });
+
+async function logout() {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  window.location.href = '/login';
+}
 
 // Load on page ready
 loadIntakes();
