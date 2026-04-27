@@ -22,6 +22,9 @@ const GMAIL_USER         = process.env.GMAIL_USER;
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
 const NOTIFY_EMAIL       = process.env.NOTIFY_EMAIL;
 
+const EMAIL_ENABLED = !!(GMAIL_USER && GMAIL_APP_PASSWORD);
+if (!EMAIL_ENABLED) console.log('⚠️  Email disabled — GMAIL_USER or GMAIL_APP_PASSWORD not set');
+
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1926,6 +1929,7 @@ async function generateAndEmailSNT(data) {
 
 // ─── Email — SNT ──────────────────────────────────────────────────────────────
 async function sendEmailSNT(data, docBuffer, filename) {
+  if (!EMAIL_ENABLED) { console.log('Email skipped (no SMTP configured): SNT email for', data.LAST_NAME || 'client'); return; }
   const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD }
@@ -2023,6 +2027,7 @@ Draft document attached: ${filename}
 
 // ─── Email — Intake Notification (no document attachment) ─────────────────────
 async function sendIntakeNotification(data, trustType) {
+  if (!EMAIL_ENABLED) { console.log('Email skipped (no SMTP configured): intake notification for', trustType); return; }
   const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD }
@@ -2129,6 +2134,7 @@ Dashboard: ${process.env.RENDER_EXTERNAL_URL || 'https://your-app.onrender.com'}
 
 // ─── Email — Standalone ───────────────────────────────────────────────────────
 async function sendEmailStandalone(data, attachments) {
+  if (!EMAIL_ENABLED) { console.log('Email skipped (no SMTP configured): standalone email for', data.Your_Last_Name || 'client'); return; }
   const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD }
@@ -2213,6 +2219,7 @@ ${docsList}
   console.log(`Email sent: ${clientName} — standalone docs — ${docsSelected}`);
 }
 async function sendEmail(data, docBuffer, filename, trustType) {
+  if (!EMAIL_ENABLED) { console.log('Email skipped (no SMTP configured):', trustType, 'email for', data.Your_Last_Name || 'client'); return; }
   const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD }
@@ -2381,6 +2388,7 @@ Draft document attached: ${filename}
 
 // ─── Document generation — Self-Service ──────────────────────────────────────
 async function generateAndEmailSelfService(data) {
+  if (!EMAIL_ENABLED) { console.log('Email skipped (no SMTP configured): self-service email for', data.Your_Last_Name || 'client'); return; }
   const dateStr = new Date().toISOString().slice(0,10);
   const lastName = data.Your_Last_Name || 'Client';
   const clientEmail = data.client_email || null;
