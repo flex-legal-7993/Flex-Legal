@@ -2838,6 +2838,90 @@ app.get('/dashboard', (req, res) => {
 
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DASHBOARD CHAT — Attorney AI assistant (intake-aware + general)
+// ─────────────────────────────────────────────────────────────────────────────
+const DASHBOARD_CHAT_SYSTEM = `You are an AI legal assistant embedded in an attorney's estate planning dashboard. You help attorneys review client intakes, understand estate planning concepts, and prepare for client meetings.
+
+CAPABILITIES:
+- When intake data is provided, you can analyze it, summarize the client's situation, identify potential issues, suggest questions for the attorney to ask, and explain relevant legal considerations.
+- When no intake is selected, you can answer general estate planning questions, explain trust types, discuss common provisions, and help with planning strategies.
+
+GUIDELINES:
+- You are speaking to a licensed attorney, so use appropriate legal terminology.
+- Be concise and practical — attorneys are busy.
+- When analyzing intake data, proactively flag anything unusual or that might need follow-up (e.g., property in multiple states, blended families, unusual trustee choices, missing information).
+- Never provide legal advice as if you are the attorney — you are a research and analysis tool.
+- Format responses clearly. Use bullet points for lists of issues or recommendations.
+- If asked about something outside estate planning law, you can still help but note your primary expertise area.
+
+TRUST TYPES IN THIS SYSTEM:
+- Joint Trust (married couples): Revocable living trust with pour-over wills, DPOAs, and healthcare directives
+- Single Trust: Same as joint but for unmarried individuals
+- Standalone Will: Will + DPOA + Healthcare Directive (no trust)
+- Special Needs Trust (SNT): Third-party SNT embedded in a revocable trust for married couples with a disabled child
+- Last Will (self-service): Simplified will package — auto-generated, no attorney review`;
+
+app.post('/api/dashboard-chat', async (req, res) => {
+  const { messages, intakeId } = req.body;
+
+  if (!messages || !Array.isArray(messages)) {
+    return res.status(400).json({ error: 'Messages array required' });
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  try {
+    // Build system prompt — inject intake data if an intake is selected
+    let systemPrompt = DASHBOARD_CHAT_SYSTEM;
+
+    if (intakeId && db) {
+      try {
+        const stmt = db.prepare('SELECT * FROM intakes WHERE id = ?');
+        stmt.bind([intakeId]);
+        if (stmt.step()) {
+          const row = stmt.getAsObject();
+          const intakeData = JSON.parse(row.intake_data || '{}');
+          systemPrompt += `\n\nCURRENTLY SELECTED INTAKE:\n- Client: ${row.client_name}\n- Package: ${row.package_type}\n- Trust Type: ${row.trust_type}\n- Status: ${row.status}\n- Submitted: ${row.created_at}\n- Attorney Notes: ${row.notes || 'None'}\n\nFULL INTAKE DATA:\n${JSON.stringify(intakeData, null, 2)}`;
+        }
+        stmt.free();
+      } catch (dbErr) {
+        console.error('Dashboard chat — failed to load intake:', dbErr);
+      }
+    }
+
+    const stream = anthropic.messages.stream({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2000,
+      system: systemPrompt,
+      messages
+    });
+
+    stream.on('text', (text) => {
+      res.write(`data: ${JSON.stringify({ type: 'text', text })}\n\n`);
+    });
+
+    stream.on('finalMessage', () => {
+      res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+      res.end();
+    });
+
+    stream.on('error', (err) => {
+      console.error('Dashboard chat stream error:', err);
+      res.write(`data: ${JSON.stringify({ type: 'error', message: 'Stream error' })}\n\n`);
+      res.end();
+    });
+
+  } catch (err) {
+    console.error('Dashboard chat error:', err);
+    res.write(`data: ${JSON.stringify({ type: 'error', message: 'Failed to start chat' })}\n\n`);
+    res.end();
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 
 // Initialize database then start server
