@@ -151,10 +151,10 @@
   /* Column theme colors */
   .column-new .column-header { border-bottom-color: #3b82f6; }
   .column-new .column-dot { background: #3b82f6; }
-  .column-reviewed .column-header { border-bottom-color: #f59e0b; }
-  .column-reviewed .column-dot { background: #f59e0b; }
-  .column-signed .column-header { border-bottom-color: #8b5cf6; }
-  .column-signed .column-dot { background: #8b5cf6; }
+  .column-drafting .column-header { border-bottom-color: #f59e0b; }
+  .column-drafting .column-dot { background: #f59e0b; }
+  .column-sent .column-header { border-bottom-color: #8b5cf6; }
+  .column-sent .column-dot { background: #8b5cf6; }
   .column-complete .column-header { border-bottom-color: #22c55e; }
   .column-complete .column-dot { background: #22c55e; }
 
@@ -171,89 +171,208 @@
     border-radius: 0 0 12px 12px;
   }
 
-  /* Client cards */
+  /* Board tabs */
+  .board-tabs {
+    display: flex;
+    gap: 0;
+    padding: 16px 20px 0 20px;
+  }
+  .board-tab {
+    padding: 10px 24px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'Source Sans 3', sans-serif;
+    color: var(--text-muted);
+    background: var(--cream-dark);
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 10px 10px 0 0;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-right: -1px;
+    position: relative;
+  }
+  .board-tab.active {
+    background: var(--cream);
+    color: var(--navy);
+    border-bottom: 1px solid var(--cream);
+    z-index: 1;
+  }
+  .board-tab:hover:not(.active) { color: var(--navy); background: #eae7e0; }
+  .board-tab .tab-count {
+    display: inline-block;
+    background: var(--border);
+    color: var(--text-muted);
+    border-radius: 10px;
+    padding: 0 7px;
+    font-size: 11px;
+    margin-left: 6px;
+    font-weight: 700;
+  }
+  .board-tab.active .tab-count {
+    background: var(--navy);
+    color: var(--white);
+  }
+
+  /* Client cards — compact horizontal rows */
   .client-card {
     background: var(--white);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 14px 16px;
-    margin-bottom: 8px;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 6px;
     cursor: grab;
-    transition: all 0.2s;
+    transition: all 0.15s;
     position: relative;
     user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
   }
   .client-card:hover {
-    box-shadow: 0 3px 12px rgba(0,0,0,0.08);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
     border-color: var(--gold-light);
   }
   .client-card:active { cursor: grabbing; }
   .client-card.dragging {
     opacity: 0.5;
-    transform: rotate(2deg);
+    transform: rotate(1deg);
   }
 
+  .card-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--navy);
+    color: var(--gold-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    flex-shrink: 0;
+    letter-spacing: 0.5px;
+  }
+  .card-info {
+    flex: 1;
+    min-width: 0;
+  }
   .card-name {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--navy);
-    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .card-email {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-muted);
-    margin-bottom: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  .card-meta {
+  .card-right {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .card-pill {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+  }
+  .card-pill.pill-new { background: #dbeafe; color: #1e40af; }
+  .card-pill.pill-drafting { background: #fef3c7; color: #92400e; }
+  .card-pill.pill-sent { background: #ede9fe; color: #5b21b6; }
+  .card-pill.pill-complete { background: #d1fae5; color: #065f46; }
+  .card-pill.pill-signing {
+    background: #d1fae5;
+    color: #065f46;
+    font-weight: 600;
+  }
+  .card-date {
     font-size: 11px;
     color: var(--text-light);
+    white-space: nowrap;
   }
-  .card-package {
-    background: var(--cream);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 1px 6px;
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--text-muted);
-  }
-  .card-package.selfservice {
-    background: #fff3cd;
-    border-color: #d4a017;
-    color: #856404;
-  }
-  .card-docs {
-    display: flex;
-    gap: 4px;
-    margin-top: 8px;
-    flex-wrap: wrap;
-  }
-  .doc-chip {
-    padding: 1px 6px;
-    border-radius: 3px;
-    font-size: 10px;
-    background: #f0f4f8;
-    color: #4a5568;
-  }
-  .card-flags {
-    margin-top: 6px;
-    font-size: 10px;
-    color: var(--danger);
-    font-weight: 600;
-  }
-  .card-click-hint {
-    position: absolute;
-    top: 8px;
-    right: 10px;
+  .card-chevron {
     font-size: 14px;
     color: var(--border);
     opacity: 0;
-    transition: opacity 0.2s;
+    transition: opacity 0.15s;
   }
-  .client-card:hover .card-click-hint { opacity: 1; }
+  .client-card:hover .card-chevron { opacity: 1; }
+
+  /* Self-service section */
+  .selfservice-section {
+    display: none;
+    padding: 20px;
+  }
+  .selfservice-section.active { display: block; }
+  .ss-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .ss-table thead th {
+    padding: 12px 16px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    text-align: left;
+    background: var(--cream-dark);
+    border-bottom: 1px solid var(--border);
+  }
+  .ss-table tbody tr {
+    transition: background 0.15s;
+  }
+  .ss-table tbody tr:hover { background: var(--cream); }
+  .ss-table tbody td {
+    padding: 10px 16px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .ss-table tbody tr:last-child td { border-bottom: none; }
+  .ss-actions {
+    display: flex;
+    gap: 6px;
+  }
+  .ss-btn {
+    padding: 4px 12px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'Source Sans 3', sans-serif;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--cream);
+    color: var(--text-muted);
+    transition: all 0.15s;
+  }
+  .ss-btn:hover { background: var(--cream-dark); }
+  .ss-btn.ss-archive { color: var(--navy); }
+  .ss-btn.ss-archive:hover { background: var(--gold-light); border-color: var(--gold); }
+  .ss-btn.ss-delete { color: var(--danger); }
+  .ss-btn.ss-delete:hover { background: var(--danger-bg); border-color: #fca5a5; }
+  .ss-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-light);
+    font-size: 14px;
+  }
 
   /* Ghost placeholder while dragging */
   .drop-placeholder {
@@ -755,6 +874,11 @@
   </div>
 </div>
 
+<div class="board-tabs">
+  <button class="board-tab active" id="tabAttorney" onclick="switchBoardTab('attorney')">Attorney-Directed <span class="tab-count" id="tabCountAttorney">0</span></button>
+  <button class="board-tab" id="tabSelfService" onclick="switchBoardTab('selfservice')">Self-Service <span class="tab-count" id="tabCountSelfService">0</span></button>
+</div>
+
 <div class="board" id="board">
   <div class="column column-new" data-status="new">
     <div class="column-header">
@@ -767,26 +891,26 @@
     <div class="column-body" id="colNew"></div>
   </div>
 
-  <div class="column column-reviewed" data-status="reviewed">
+  <div class="column column-drafting" data-status="reviewed">
     <div class="column-header">
       <div class="column-header-left">
         <div class="column-dot"></div>
-        <div class="column-title">Reviewed</div>
+        <div class="column-title">Drafting</div>
       </div>
-      <div class="column-count" id="countReviewed">0</div>
+      <div class="column-count" id="countDrafting">0</div>
     </div>
-    <div class="column-body" id="colReviewed"></div>
+    <div class="column-body" id="colDrafting"></div>
   </div>
 
-  <div class="column column-signed" data-status="signed">
+  <div class="column column-sent" data-status="signed">
     <div class="column-header">
       <div class="column-header-left">
         <div class="column-dot"></div>
-        <div class="column-title">Signed</div>
+        <div class="column-title">Sent to Client</div>
       </div>
-      <div class="column-count" id="countSigned">0</div>
+      <div class="column-count" id="countSent">0</div>
     </div>
-    <div class="column-body" id="colSigned"></div>
+    <div class="column-body" id="colSent"></div>
   </div>
 
   <div class="column column-complete" data-status="complete">
@@ -799,6 +923,22 @@
     </div>
     <div class="column-body" id="colComplete"></div>
   </div>
+</div>
+
+<div class="selfservice-section" id="selfserviceSection">
+  <table class="ss-table">
+    <thead>
+      <tr>
+        <th>Client</th>
+        <th>Email</th>
+        <th>Date</th>
+        <th>Documents</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="ssTableBody">
+    </tbody>
+  </table>
 </div>
 
 <!-- Detail panel overlay -->
@@ -836,6 +976,39 @@ function escape(str) {
   return div.innerHTML;
 }
 
+// ── Board tab switching ───────────────────────────────────────────────────
+let activeTab = 'attorney';
+
+function switchBoardTab(tab) {
+  activeTab = tab;
+  document.getElementById('tabAttorney').classList.toggle('active', tab === 'attorney');
+  document.getElementById('tabSelfService').classList.toggle('active', tab === 'selfservice');
+  document.getElementById('board').style.display = tab === 'attorney' ? 'flex' : 'none';
+  document.getElementById('selfserviceSection').classList.toggle('active', tab === 'selfservice');
+  if (tab === 'selfservice') renderSelfServiceTable();
+}
+
+// Status label mapping (DB status → display label)
+const STATUS_LABELS = {
+  new: 'New',
+  reviewed: 'Drafting',
+  signed: 'Sent to Client',
+  complete: 'Complete'
+};
+const STATUS_PILL_CLASS = {
+  new: 'pill-new',
+  reviewed: 'pill-drafting',
+  signed: 'pill-sent',
+  complete: 'pill-complete'
+};
+
+function getInitials(name) {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 // ── Render Kanban ──────────────────────────────────────────────────────────
 function renderBoard() {
   const search = (document.getElementById('searchInput').value || '').toLowerCase();
@@ -844,15 +1017,26 @@ function renderBoard() {
     ? intakes.filter(i => i.client_name.toLowerCase().includes(search) || (i.client_email || '').toLowerCase().includes(search))
     : intakes;
 
+  // Split attorney-directed vs self-service
+  const attorney = filtered.filter(i => i.trust_type !== 'selfservice');
+  const selfservice = filtered.filter(i => i.trust_type === 'selfservice');
+
+  // Update tab counts
+  document.getElementById('tabCountAttorney').textContent = attorney.length;
+  document.getElementById('tabCountSelfService').textContent = selfservice.length;
+
   const buckets = { new: [], reviewed: [], signed: [], complete: [] };
-  filtered.forEach(i => {
+  attorney.forEach(i => {
     if (buckets[i.status]) buckets[i.status].push(i);
   });
 
   renderColumn('colNew', buckets.new, 'countNew');
-  renderColumn('colReviewed', buckets.reviewed, 'countReviewed');
-  renderColumn('colSigned', buckets.signed, 'countSigned');
+  renderColumn('colDrafting', buckets.reviewed, 'countDrafting');
+  renderColumn('colSent', buckets.signed, 'countSent');
   renderColumn('colComplete', buckets.complete, 'countComplete');
+
+  // If self-service tab is active, refresh it too
+  if (activeTab === 'selfservice') renderSelfServiceTable();
 }
 
 function renderColumn(colId, items, countId) {
@@ -866,26 +1050,96 @@ function renderColumn(colId, items, countId) {
 
   col.innerHTML = items.map(intake => {
     const date = new Date(intake.created_at + 'Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    const docs = (Array.isArray(intake.documents) ? intake.documents : []).map(d => `<span class="doc-chip">${d}</span>`).join('');
-    const isSS = intake.trust_type === 'selfservice';
-    const pkgLabel = intake.package_type.replace('Complete Estate Plan — ', '').replace('Attorney-Directed Documents', 'Attorney-Directed');
-    const hasFlags = intake.intake_data_preview && intake.intake_data_preview.includes('Attorney_Flags');
+    const initials = getInitials(intake.client_name);
+    const pillClass = STATUS_PILL_CLASS[intake.status] || 'pill-new';
+    const pillLabel = STATUS_LABELS[intake.status] || intake.status;
+
+    // Show green signing date pill for "Sent to Client" column items that have a signing date
+    let signingPill = '';
+    if (intake.status === 'signed' && intake.intake_data_preview) {
+      const signingMatch = intake.intake_data_preview.match(/signing_date['":\s]+([^'",}]+)/i);
+      if (signingMatch) {
+        signingPill = `<span class="card-pill pill-signing">${escape(signingMatch[1].trim())}</span>`;
+      }
+    }
 
     return `
       <div class="client-card" draggable="true" data-id="${intake.id}"
            ondragstart="onDragStart(event, ${intake.id})"
            ondragend="onDragEnd(event)"
            onclick="openDetail(${intake.id})">
-        <span class="card-click-hint">&#8250;</span>
-        <div class="card-name">${escape(intake.client_name)}</div>
-        <div class="card-email">${escape(intake.client_email || '')}</div>
-        <div class="card-meta">
-          <span class="card-package ${isSS ? 'selfservice' : ''}">${escape(pkgLabel)}</span>
-          <span>${date}</span>
+        <div class="card-avatar">${initials}</div>
+        <div class="card-info">
+          <div class="card-name">${escape(intake.client_name)}</div>
+          <div class="card-email">${escape(intake.client_email || '')}</div>
         </div>
-        ${docs ? `<div class="card-docs">${docs}</div>` : ''}
+        <div class="card-right">
+          ${signingPill}
+          <span class="card-pill ${pillClass}">${pillLabel}</span>
+          <span class="card-date">${date}</span>
+          <span class="card-chevron">&#8250;</span>
+        </div>
       </div>`;
   }).join('');
+}
+
+// ── Self-Service Table ────────────────────────────────────────────────────
+function renderSelfServiceTable() {
+  const search = (document.getElementById('searchInput').value || '').toLowerCase();
+  const ssIntakes = intakes.filter(i => i.trust_type === 'selfservice');
+  const filtered = search
+    ? ssIntakes.filter(i => i.client_name.toLowerCase().includes(search) || (i.client_email || '').toLowerCase().includes(search))
+    : ssIntakes;
+
+  const tbody = document.getElementById('ssTableBody');
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="ss-empty">No self-service intakes</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(intake => {
+    const date = new Date(intake.created_at + 'Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const docs = (Array.isArray(intake.documents) ? intake.documents : []).join(', ') || 'None';
+    return `
+      <tr>
+        <td style="font-weight:600;color:var(--navy);cursor:pointer;" onclick="openDetail(${intake.id})">${escape(intake.client_name)}</td>
+        <td style="color:var(--text-muted);">${escape(intake.client_email || '')}</td>
+        <td>${date}</td>
+        <td style="font-size:12px;color:var(--text-muted);">${escape(docs)}</td>
+        <td>
+          <div class="ss-actions">
+            <button class="ss-btn ss-archive" onclick="archiveSelfService(${intake.id})" title="Archive">Archive</button>
+            <button class="ss-btn ss-delete" onclick="deleteSelfService(${intake.id})" title="Delete">Delete</button>
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+}
+
+async function archiveSelfService(id) {
+  try {
+    await fetch(`/api/intakes/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'complete' })
+    });
+    const intake = intakes.find(i => i.id === id);
+    if (intake) intake.status = 'complete';
+    renderSelfServiceTable();
+  } catch (err) {
+    console.error('Failed to archive:', err);
+  }
+}
+
+async function deleteSelfService(id) {
+  if (!confirm('Delete this self-service intake? This cannot be undone.')) return;
+  try {
+    await fetch(`/api/intakes/${id}`, { method: 'DELETE' });
+    intakes = intakes.filter(i => i.id !== id);
+    renderBoard();
+  } catch (err) {
+    console.error('Failed to delete:', err);
+  }
 }
 
 // ── Drag & Drop ────────────────────────────────────────────────────────────
@@ -1181,8 +1435,8 @@ function renderDetail(intake) {
       <div class="detail-section-title">Status</div>
       <select class="status-select" id="statusSelect" onchange="updateStatus(${intake.id}, this.value)">
         <option value="new" ${intake.status === 'new' ? 'selected' : ''}>New</option>
-        <option value="reviewed" ${intake.status === 'reviewed' ? 'selected' : ''}>Reviewed</option>
-        <option value="signed" ${intake.status === 'signed' ? 'selected' : ''}>Signed</option>
+        <option value="reviewed" ${intake.status === 'reviewed' ? 'selected' : ''}>Drafting</option>
+        <option value="signed" ${intake.status === 'signed' ? 'selected' : ''}>Sent to Client</option>
         <option value="complete" ${intake.status === 'complete' ? 'selected' : ''}>Complete</option>
       </select>
     </div>

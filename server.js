@@ -2732,6 +2732,24 @@ app.patch('/api/intakes/:id', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
+// Delete an intake (self-service only)
+app.delete('/api/intakes/:id', requireAuth, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not ready' });
+  const id = parseInt(req.params.id);
+  // Only allow deleting self-service intakes
+  const stmt = db.prepare('SELECT trust_type FROM intakes WHERE id = ?');
+  stmt.bind([id]);
+  if (!stmt.step()) { stmt.free(); return res.status(404).json({ error: 'Not found' }); }
+  const row = stmt.getAsObject();
+  stmt.free();
+  if (row.trust_type !== 'selfservice') {
+    return res.status(403).json({ error: 'Only self-service intakes can be deleted' });
+  }
+  db.run('DELETE FROM intakes WHERE id = ?', [id]);
+  saveDatabase();
+  res.json({ success: true });
+});
+
 // Re-generate and download a document
 app.get('/api/intakes/:id/download/:docType', requireAuth, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Database not ready' });
