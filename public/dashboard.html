@@ -1366,18 +1366,12 @@ let chatIntakeId = null; // intake loaded as context
 let chatIntakeName = null;
 
 function toggleChat() {
+  // Only allow opening if an intake is loaded
+  if (!chatOpen && !chatIntakeId) return;
   chatOpen = !chatOpen;
   const overlay = document.getElementById('chatOverlay');
   const fab = document.getElementById('chatFab');
   if (chatOpen) {
-    // If an intake detail is open, auto-load its context
-    if (currentDetailId) {
-      const intake = intakes.find(i => i.id === currentDetailId);
-      if (intake) {
-        chatIntakeId = intake.id;
-        chatIntakeName = intake.client_name;
-      }
-    }
     overlay.classList.add('open');
     fab.innerHTML = '&#10005;';
     updateChatContext();
@@ -1397,39 +1391,32 @@ function updateChatContext() {
     ctxEl.textContent = 'Context: ' + chatIntakeName;
     ctxEl.style.display = 'block';
     fab.classList.add('has-context');
+    fab.style.display = 'flex';
   } else {
     ctxEl.style.display = 'none';
     fab.classList.remove('has-context');
+    fab.style.display = 'none';
   }
 }
 
 function clearChatContext() {
-  chatIntakeId = null;
-  chatIntakeName = null;
   chatMessages = [];
-  updateChatContext();
   renderChatMessages();
 }
 
 function renderChatMessages() {
   const container = document.getElementById('chatMessagesContainer');
   if (chatMessages.length === 0) {
-    const suggestions = chatIntakeId
-      ? [
-          'Summarize this client\'s estate plan',
-          'Are there any red flags or missing information?',
-          'What questions should I ask at the signing?'
-        ]
-      : [
-          'What\'s the difference between a joint and single trust?',
-          'When should a client consider a Special Needs Trust?',
-          'Common issues with blended family estate plans'
-        ];
+    const suggestions = [
+      'Summarize this client\'s estate plan',
+      'Are there any red flags or missing information?',
+      'What questions should I ask at the signing?'
+    ];
     container.innerHTML = `
       <div class="chat-welcome">
         <div class="chat-welcome-icon">&#9878;</div>
-        <div class="chat-welcome-title">${chatIntakeId ? 'Intake Loaded' : 'AI Legal Assistant'}</div>
-        <div>${chatIntakeId ? 'Ask me anything about this client\'s intake, or general estate planning questions.' : 'Ask me about estate planning, trust types, or select a client intake for context-aware analysis.'}</div>
+        <div class="chat-welcome-title">Intake Loaded</div>
+        <div>Ask me anything about this client's intake — summaries, red flags, signing prep, or follow-up questions.</div>
         <div class="chat-suggestions">
           ${suggestions.map(s => `<button class="chat-suggestion" onclick="sendSuggestion(this)">${s}</button>`).join('')}
         </div>
@@ -1568,7 +1555,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// When opening an intake detail, update chat context if chat is open
+// When opening an intake detail, load chat context and show the chat button
 const _origOpenDetail = openDetail;
 openDetail = async function(id) {
   await _origOpenDetail(id);
@@ -1584,10 +1571,26 @@ openDetail = async function(id) {
     if (chatOpen) renderChatMessages();
   }
 };
+
+// When closing the detail panel, hide the chat
+const _origCloseDetailPanel = closeDetailPanel;
+closeDetailPanel = function() {
+  _origCloseDetailPanel();
+  // Close chat and hide button
+  if (chatOpen) {
+    chatOpen = false;
+    document.getElementById('chatOverlay').classList.remove('open');
+    document.getElementById('chatFab').innerHTML = '&#128172;';
+  }
+  chatIntakeId = null;
+  chatIntakeName = null;
+  chatMessages = [];
+  updateChatContext();
+};
 </script>
 
 <!-- Floating Chat Button -->
-<button class="chat-fab" id="chatFab" onclick="toggleChat()" title="AI Assistant">&#128172;</button>
+<button class="chat-fab" id="chatFab" onclick="toggleChat()" title="AI Assistant" style="display:none;">&#128172;</button>
 
 <!-- Chat Overlay -->
 <div class="chat-overlay" id="chatOverlay">
