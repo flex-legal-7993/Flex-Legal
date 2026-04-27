@@ -1942,6 +1942,10 @@ chatInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKe
       // Update page title
       document.title = document.title.replace('Flex Legal Services', firm);
 
+      // Update header logo (has inner <span> that breaks text walker)
+      const headerLogo = document.querySelector('.header-logo');
+      if (headerLogo) headerLogo.textContent = firm;
+
       // Update all text content in the page that references "Flex Legal Services"
       function walkText(node) {
         if (node.nodeType === 3 && node.textContent.includes('Flex Legal')) {
