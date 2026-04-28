@@ -1884,6 +1884,17 @@ closeDetailPanel = function() {
       document.getElementById('headerLogo').textContent = firm;
       document.title = 'Attorney Dashboard — ' + firm;
     }
+    if (config.brandNavy) {
+      document.documentElement.style.setProperty('--navy', config.brandNavy);
+      document.documentElement.style.setProperty('--navy-dark', config.brandNavy);
+    }
+    if (config.brandGold) {
+      document.documentElement.style.setProperty('--gold', config.brandGold);
+      document.documentElement.style.setProperty('--gold-light', config.brandGold + '44');
+    }
+    if (config.brandCream) {
+      document.documentElement.style.setProperty('--cream', config.brandCream);
+    }
   } catch (e) {}
   const footer = document.createElement('div');
   footer.style.cssText = 'position:fixed;bottom:0;left:0;right:0;text-align:center;padding:6px 0;font-size:11px;color:rgba(255,255,255,0.5);background:rgba(15,61,107,0.95);border-top:1px solid rgba(255,255,255,0.1);z-index:199;font-family:Source Sans 3,sans-serif;';

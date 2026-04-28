@@ -1964,6 +1964,18 @@ chatInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKe
         if (runs >= 10) clearInterval(interval);
       }, 500);
     }
+    // Apply brand colors if provided
+    if (config.brandNavy) {
+      document.documentElement.style.setProperty('--navy', config.brandNavy);
+      document.documentElement.style.setProperty('--navy-dark', config.brandNavy);
+    }
+    if (config.brandGold) {
+      document.documentElement.style.setProperty('--gold', config.brandGold);
+      document.documentElement.style.setProperty('--gold-light', config.brandGold + '44');
+    }
+    if (config.brandCream) {
+      document.documentElement.style.setProperty('--cream', config.brandCream);
+    }
   } catch (e) { /* ignore — default branding stays */ }
 
   // Add Powered by Casefly footer (always)

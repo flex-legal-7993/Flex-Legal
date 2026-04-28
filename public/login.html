@@ -301,6 +301,17 @@ fetch('/api/auth/me').then(r => r.json()).then(data => {
       document.getElementById('loginLogo').textContent = firm;
       document.title = 'Attorney Login — ' + firm;
     }
+    if (config.brandNavy) {
+      document.documentElement.style.setProperty('--navy', config.brandNavy);
+      document.documentElement.style.setProperty('--navy-dark', config.brandNavy);
+    }
+    if (config.brandGold) {
+      document.documentElement.style.setProperty('--gold', config.brandGold);
+      document.documentElement.style.setProperty('--gold-light', config.brandGold + '44');
+    }
+    if (config.brandCream) {
+      document.documentElement.style.setProperty('--cream', config.brandCream);
+    }
   } catch (e) {}
   const footer = document.createElement('div');
   footer.style.cssText = 'position:fixed;bottom:0;left:0;right:0;text-align:center;padding:6px 0;font-size:11px;color:#9a948e;background:rgba(250,248,244,0.95);border-top:1px solid #ddd8d0;z-index:50;font-family:Source Sans 3,sans-serif;';

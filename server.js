@@ -2972,7 +2972,12 @@ app.get('/dashboard', requireAuth, (req, res) => {
 
 // Public config endpoint (no auth required) — used by all pages for branding
 app.get('/api/config', (req, res) => {
-  res.json({ firmName: FIRM_NAME });
+  const config = { firmName: FIRM_NAME };
+  // Optional brand colors (env vars, hex without #)
+  if (process.env.BRAND_NAVY) config.brandNavy = '#' + process.env.BRAND_NAVY;
+  if (process.env.BRAND_GOLD) config.brandGold = '#' + process.env.BRAND_GOLD;
+  if (process.env.BRAND_CREAM) config.brandCream = '#' + process.env.BRAND_CREAM;
+  res.json(config);
 });
 
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
