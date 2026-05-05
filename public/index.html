@@ -938,7 +938,6 @@
           <div class="pkg-card-title">Financial Power of Attorney</div>
           <div class="pkg-card-desc">Prepare your own Financial POA. Designates someone you trust to manage your finances and legal affairs if you become unable to.</div>
           <div class="pkg-card-includes">Not attorney-reviewed &middot; Review with an attorney before signing</div>
-          <div class="pkg-card-price">$129</div>
         </div>
       </div>
 
@@ -948,7 +947,6 @@
           <div class="pkg-card-title">Healthcare Directive</div>
           <div class="pkg-card-desc">Prepare your own Healthcare Directive. Name a healthcare agent and record your end-of-life wishes.</div>
           <div class="pkg-card-includes">Not attorney-reviewed &middot; Review with an attorney before signing</div>
-          <div class="pkg-card-price">$129</div>
         </div>
       </div>
 
@@ -958,7 +956,6 @@
           <div class="pkg-card-title">Last Will</div>
           <div class="pkg-card-desc">Prepare your own Last Will. Directs how your property is distributed and names your Personal Representative.</div>
           <div class="pkg-card-includes">Not attorney-reviewed &middot; Review with an attorney before signing</div>
-          <div class="pkg-card-price">$129</div>
         </div>
       </div>
 
@@ -968,7 +965,6 @@
           <div class="pkg-card-title">All Three Documents — Bundle</div>
           <div class="pkg-card-desc">Financial POA, Healthcare Directive, and Last Will — all three in one package.</div>
           <div class="pkg-card-includes">Not attorney-reviewed &middot; Review with an attorney before signing</div>
-          <div class="pkg-card-price">$299 <span style="font-size:11px;font-weight:400;color:var(--text-light);">Save $88</span></div>
         </div>
       </div>
 
@@ -1067,7 +1063,6 @@
     <div class="payment-hero">
       <div class="payment-hero-eyebrow">Secure Checkout</div>
       <div class="payment-hero-title" id="paymentTitle">Financial Power of Attorney</div>
-      <div class="payment-hero-price" id="paymentPrice">$129</div>
       <div class="payment-hero-body">Your document will be emailed to you immediately after completing the questionnaire.</div>
     </div>
     <div class="payment-card">
@@ -1400,10 +1395,8 @@ function proceedToConsent() {
     if (newBtn) newBtn.addEventListener('click', () => {
       if (!newCheckbox || !newCheckbox.checked) return;
       document.getElementById('consentScreen').classList.add('hidden');
-      const prices = { 'POA — Self-Service': '$129', 'Healthcare Directive — Self-Service': '$129', 'Will — Self-Service': '$129', 'All Three Documents — Self-Service': '$299' };
       const titles = { 'POA — Self-Service': 'Financial Power of Attorney', 'Healthcare Directive — Self-Service': 'Healthcare Directive', 'Will — Self-Service': 'Last Will', 'All Three Documents — Self-Service': 'All Three Documents — Bundle' };
       document.getElementById('paymentTitle').textContent = titles[selectedPackage] || selectedPackage;
-      document.getElementById('paymentPrice').textContent = prices[selectedPackage] || '$129';
       document.getElementById('paymentScreen').classList.remove('hidden');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
@@ -1820,12 +1813,6 @@ consentBtn.addEventListener('click', () => {
   if (trustType === 'selfservice') {
     // Show payment screen instead of chat
     consentScreen.classList.add('hidden');
-    const prices = {
-      'POA — Self-Service': '$129',
-      'Healthcare Directive — Self-Service': '$129',
-      'Will — Self-Service': '$129',
-      'All Three Documents — Self-Service': '$299'
-    };
     const titles = {
       'POA — Self-Service': 'Financial Power of Attorney',
       'Healthcare Directive — Self-Service': 'Healthcare Directive',
@@ -1833,7 +1820,6 @@ consentBtn.addEventListener('click', () => {
       'All Three Documents — Self-Service': 'All Three Documents — Bundle'
     };
     document.getElementById('paymentTitle').textContent = titles[selectedPackage] || selectedPackage;
-    document.getElementById('paymentPrice').textContent = prices[selectedPackage] || '$129';
     document.getElementById('paymentScreen').classList.remove('hidden');
     window.scrollTo({ top: 0, behavior: 'smooth' });
     return;
