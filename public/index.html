@@ -1625,6 +1625,11 @@ function showConfirmation(data) {
   screen.classList.remove('hidden');
   screen.classList.add('visible');
 
+  const isSingle = getTrustType() === 'single';
+  const isStandalone = getTrustType() === 'standalone';
+  const isSelfService = getTrustType() === 'selfservice';
+  const isSNT = getTrustType() === 'snt';
+
   const firstName = data['Your_First_Name'] || 'there';
   document.getElementById('confirmTitle').textContent = isSelfService
     ? `Thank you, ${firstName} — your document is on its way`
@@ -1635,11 +1640,6 @@ function showConfirmation(data) {
 
   const rows = document.getElementById('summaryRows');
   rows.innerHTML = '';
-
-  const isSingle = getTrustType() === 'single';
-  const isStandalone = getTrustType() === 'standalone';
-  const isSelfService = getTrustType() === 'selfservice';
-  const isSNT = getTrustType() === 'snt';
 
   let fields;
   if (isSelfService) {

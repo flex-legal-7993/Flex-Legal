@@ -1380,11 +1380,13 @@ Then immediately output the JSON:
 Attorney_Flags: all flags as a single string separated by " | "`;
 
 function getSystemPrompt(trustType) {
-  if (trustType === 'single') return SINGLE_TRUST_SYSTEM_PROMPT;
-  if (trustType === 'standalone') return STANDALONE_SYSTEM_PROMPT;
-  if (trustType === 'selfservice') return SELFSERVICE_SYSTEM_PROMPT;
-  if (trustType === 'snt') return SNT_SYSTEM_PROMPT;
-  return SYSTEM_PROMPT;
+  const todayStr = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/Denver' });
+  const datePrefix = `IMPORTANT: Today's date is ${todayStr}. Use this date when calculating ages from dates of birth.\n\n`;
+  if (trustType === 'single') return datePrefix + SINGLE_TRUST_SYSTEM_PROMPT;
+  if (trustType === 'standalone') return datePrefix + STANDALONE_SYSTEM_PROMPT;
+  if (trustType === 'selfservice') return datePrefix + SELFSERVICE_SYSTEM_PROMPT;
+  if (trustType === 'snt') return datePrefix + SNT_SYSTEM_PROMPT;
+  return datePrefix + SYSTEM_PROMPT;
 }
 
 // ─── Start — Married/Joint Trust ──────────────────────────────────────────────
@@ -1599,7 +1601,11 @@ async function generateAndEmail(data) {
   const zip = new PizZip(content);
 
   const lastName = data.Your_Last_Name || 'Client';
+  const currentDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/Denver' });
+  const currentYear = new Date().toLocaleDateString('en-US', { year: 'numeric', timeZone: 'America/Denver' });
   const mergeData = {
+    Current_Date:                     currentDate,
+    Current_Year:                     currentYear,
     Your_First_Name:                  data.Your_First_Name || '',
     Your_Last_Name:                   data.Your_Last_Name || '',
     Your_Birth_Date:                  data.Your_Birth_Date || '',
@@ -1674,7 +1680,11 @@ async function generateAndEmailSingle(data) {
   const zip = new PizZip(content);
 
   const lastName = data.Your_Last_Name || 'Client';
+  const currentDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/Denver' });
+  const currentYear = new Date().toLocaleDateString('en-US', { year: 'numeric', timeZone: 'America/Denver' });
   const mergeData = {
+    Current_Date:                     currentDate,
+    Current_Year:                     currentYear,
     Your_First_Name:                  data.Your_First_Name || '',
     Your_Last_Name:                   data.Your_Last_Name || '',
     Your_Birth_Date:                  data.Your_Birth_Date || '',
@@ -1861,7 +1871,11 @@ async function generateAndEmailSNT(data) {
   const zip = new PizZip(content);
 
   const lastName = data.LAST_NAME || 'Client';
+  const currentDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/Denver' });
+  const currentYear = new Date().toLocaleDateString('en-US', { year: 'numeric', timeZone: 'America/Denver' });
   const mergeData = {
+    Current_Date:                     currentDate,
+    Current_Year:                     currentYear,
     // Spouse 1 (husband in template terms)
     Husbands_first_name:              data.Husbands_first_name || '',
     HUSBANDS_FIRST_NAME:              data.HUSBANDS_FIRST_NAME || (data.Husbands_first_name || '').toUpperCase(),
@@ -2931,7 +2945,9 @@ app.post('/api/intakes/:id/generate', requireAuth, (req, res) => {
     const zip = new PizZip(content);
 
     // Pass through all data fields as merge data
-    const mergeData = { ...data };
+    const currentDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/Denver' });
+    const currentYear = new Date().toLocaleDateString('en-US', { year: 'numeric', timeZone: 'America/Denver' });
+    const mergeData = { ...data, Current_Date: currentDate, Current_Year: currentYear };
 
     // Render headers/footers
     Object.keys(zip.files).forEach(fname => {
