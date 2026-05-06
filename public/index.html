@@ -1235,9 +1235,7 @@ function getSelfServiceDocs() {
 
 // ─── Back navigation ─────────────────────────────────────────────────────────
 function goBackToConsent() {
-  document.getElementById('paymentScreen').classList.add('hidden');
-  document.getElementById('consentScreen').classList.remove('hidden');
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  history.back();
 }
 
 function proceedAfterPayment() {
@@ -1253,9 +1251,7 @@ function proceedAfterPayment() {
 }
 
 function goBackToPackages() {
-  document.getElementById('consentScreen').classList.add('hidden');
-  document.getElementById('pkgScreen').classList.remove('hidden');
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  history.back();
 }
 
 function confirmStartOver() {
