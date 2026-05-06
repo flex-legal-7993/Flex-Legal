@@ -962,6 +962,10 @@ let placeholder = null;
 async function loadIntakes() {
   try {
     const res = await fetch('/api/intakes');
+    if (!res.ok) {
+      if (res.status === 401) { window.location.href = '/login'; return; }
+      throw new Error(`Server returned ${res.status}`);
+    }
     intakes = await res.json();
     renderBoard();
   } catch (err) {
@@ -1231,13 +1235,36 @@ async function openDetail(id) {
   // Don't open if we just finished dragging
   if (draggedId) return;
   currentDetailId = id;
+
+  // Show loading state immediately
+  document.getElementById('detailName').textContent = 'Loading…';
+  document.getElementById('detailBody').innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Loading client details…</div>';
+  document.getElementById('detailOverlay').classList.add('open');
+
   try {
     const res = await fetch(`/api/intakes/${id}`);
+
+    // Handle auth expiration or server errors
+    if (!res.ok) {
+      if (res.status === 401) {
+        document.getElementById('detailBody').innerHTML = '<div style="text-align:center;padding:40px;color:var(--error,#c0392b);">Your session has expired. <a href="/login" style="color:var(--gold-dark);">Sign in again</a></div>';
+        return;
+      }
+      throw new Error(`Server returned ${res.status}`);
+    }
+
     const intake = await res.json();
+
+    // Validate we got real intake data (not an error object)
+    if (!intake || !intake.client_name) {
+      document.getElementById('detailBody').innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">No data found for this client.</div>';
+      return;
+    }
+
     renderDetail(intake);
-    document.getElementById('detailOverlay').classList.add('open');
   } catch (err) {
     console.error('Failed to load intake:', err);
+    document.getElementById('detailBody').innerHTML = '<div style="text-align:center;padding:40px;color:var(--error,#c0392b);">Failed to load client details. Please try again.</div>';
   }
 }
 
@@ -1345,7 +1372,8 @@ function getMergeFieldDefs(trustType) {
 
 function renderDetail(intake) {
   const data = intake.intake_data || {};
-  const date = new Date(intake.created_at + 'Z').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const rawDate = intake.created_at ? new Date(intake.created_at + 'Z') : null;
+  const date = rawDate && !isNaN(rawDate) ? rawDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : 'Unknown';
   const isSelfService = intake.trust_type === 'selfservice';
 
   document.getElementById('detailName').textContent = intake.client_name;
