@@ -65,10 +65,14 @@ async function initDatabase() {
     intake_data TEXT NOT NULL,
     documents TEXT DEFAULT '[]',
     status TEXT DEFAULT 'new',
+    previous_status TEXT DEFAULT NULL,
     notes TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`);
+
+  // Migration: add previous_status column if missing (existing databases)
+  try { db.run('ALTER TABLE intakes ADD COLUMN previous_status TEXT DEFAULT NULL'); } catch (e) { /* column already exists */ }
 
   db.run(`CREATE TABLE IF NOT EXISTS attorneys (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2706,7 +2710,7 @@ app.get('/api/auth/me', (req, res) => {
 // List all intakes
 app.get('/api/intakes', requireAuth, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Database not ready' });
-  const result = db.exec('SELECT id, client_name, client_email, client_phone, package_type, trust_type, documents, status, notes, created_at, updated_at FROM intakes ORDER BY created_at DESC');
+  const result = db.exec('SELECT id, client_name, client_email, client_phone, package_type, trust_type, documents, status, previous_status, notes, created_at, updated_at FROM intakes ORDER BY created_at DESC');
   if (!result.length) return res.json([]);
   const cols = result[0].columns;
   const rows = result[0].values.map(row => {
@@ -2746,20 +2750,51 @@ app.patch('/api/intakes/:id', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
-// Delete an intake (self-service only)
-app.delete('/api/intakes/:id', requireAuth, (req, res) => {
+// Archive an intake (soft delete — preserves data, stores previous status for restore)
+app.post('/api/intakes/:id/archive', requireAuth, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Database not ready' });
   const id = parseInt(req.params.id);
-  // Only allow deleting self-service intakes
-  const stmt = db.prepare('SELECT trust_type FROM intakes WHERE id = ?');
+  const stmt = db.prepare('SELECT status FROM intakes WHERE id = ?');
   stmt.bind([id]);
   if (!stmt.step()) { stmt.free(); return res.status(404).json({ error: 'Not found' }); }
   const row = stmt.getAsObject();
   stmt.free();
-  if (row.trust_type !== 'selfservice') {
-    return res.status(403).json({ error: 'Only self-service intakes can be deleted' });
-  }
-  db.run('DELETE FROM intakes WHERE id = ?', [id]);
+  if (row.status === 'archived') return res.json({ success: true, message: 'Already archived' });
+  db.run('UPDATE intakes SET previous_status = ?, status = ?, updated_at = datetime(\'now\') WHERE id = ?',
+    [row.status, 'archived', id]);
+  saveDatabase();
+  res.json({ success: true });
+});
+
+// Restore an archived intake to its previous status
+app.post('/api/intakes/:id/restore', requireAuth, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not ready' });
+  const id = parseInt(req.params.id);
+  const stmt = db.prepare('SELECT status, previous_status FROM intakes WHERE id = ?');
+  stmt.bind([id]);
+  if (!stmt.step()) { stmt.free(); return res.status(404).json({ error: 'Not found' }); }
+  const row = stmt.getAsObject();
+  stmt.free();
+  if (row.status !== 'archived') return res.json({ success: true, message: 'Not archived' });
+  const restoreTo = row.previous_status || 'new';
+  db.run('UPDATE intakes SET status = ?, previous_status = NULL, updated_at = datetime(\'now\') WHERE id = ?',
+    [restoreTo, id]);
+  saveDatabase();
+  res.json({ success: true, restoredStatus: restoreTo });
+});
+
+// Delete an intake (soft delete — same as archive, preserves data)
+app.delete('/api/intakes/:id', requireAuth, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Database not ready' });
+  const id = parseInt(req.params.id);
+  const stmt = db.prepare('SELECT status FROM intakes WHERE id = ?');
+  stmt.bind([id]);
+  if (!stmt.step()) { stmt.free(); return res.status(404).json({ error: 'Not found' }); }
+  const row = stmt.getAsObject();
+  stmt.free();
+  if (row.status === 'archived') return res.json({ success: true, message: 'Already archived' });
+  db.run('UPDATE intakes SET previous_status = ?, status = ?, updated_at = datetime(\'now\') WHERE id = ?',
+    [row.status, 'archived', id]);
   saveDatabase();
   res.json({ success: true });
 });

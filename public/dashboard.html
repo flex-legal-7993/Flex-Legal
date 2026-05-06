@@ -507,6 +507,55 @@
   }
   .notes-saved.show { opacity: 1; }
 
+  /* Archive / Delete actions */
+  .detail-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+  }
+  .action-btn {
+    flex: 1;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'Source Sans 3', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .action-btn-archive {
+    background: var(--cream);
+    color: var(--text-muted);
+  }
+  .action-btn-archive:hover {
+    background: var(--cream-dark);
+    border-color: var(--text-light);
+  }
+  .action-btn-delete {
+    background: #fff5f5;
+    color: #c0392b;
+    border-color: #f5c6cb;
+  }
+  .action-btn-delete:hover {
+    background: #fde8e8;
+    border-color: #c0392b;
+  }
+  .action-btn-restore {
+    background: var(--cream);
+    color: var(--success, #27ae60);
+    border-color: var(--success, #27ae60);
+  }
+  .action-btn-restore:hover {
+    background: #e8f8f0;
+  }
+
   /* Document download buttons */
   .doc-download-btn {
     display: inline-flex;
@@ -877,6 +926,7 @@
 <div class="board-tabs">
   <button class="board-tab active" id="tabAttorney" onclick="switchBoardTab('attorney')">Attorney-Directed <span class="tab-count" id="tabCountAttorney">0</span></button>
   <button class="board-tab" id="tabSelfService" onclick="switchBoardTab('selfservice')">Self-Service <span class="tab-count" id="tabCountSelfService">0</span></button>
+  <button class="board-tab" id="tabArchived" onclick="switchBoardTab('archived')">Archived <span class="tab-count" id="tabCountArchived">0</span></button>
 </div>
 
 <div class="board" id="board">
@@ -941,6 +991,23 @@
   </table>
 </div>
 
+<div class="selfservice-section" id="archivedSection" style="display:none;">
+  <table class="ss-table">
+    <thead>
+      <tr>
+        <th>Client</th>
+        <th>Email</th>
+        <th>Type</th>
+        <th>Archived</th>
+        <th>Previous Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="archivedTableBody">
+    </tbody>
+  </table>
+</div>
+
 <!-- Detail panel overlay -->
 <div class="detail-overlay" id="detailOverlay" onclick="closeDetail(event)">
   <div class="detail-panel" id="detailPanel">
@@ -987,9 +1054,12 @@ function switchBoardTab(tab) {
   activeTab = tab;
   document.getElementById('tabAttorney').classList.toggle('active', tab === 'attorney');
   document.getElementById('tabSelfService').classList.toggle('active', tab === 'selfservice');
+  document.getElementById('tabArchived').classList.toggle('active', tab === 'archived');
   document.getElementById('board').style.display = tab === 'attorney' ? 'flex' : 'none';
   document.getElementById('selfserviceSection').classList.toggle('active', tab === 'selfservice');
+  document.getElementById('archivedSection').style.display = tab === 'archived' ? 'block' : 'none';
   if (tab === 'selfservice') renderSelfServiceTable();
+  if (tab === 'archived') renderArchivedTable();
 }
 
 // Status label mapping (DB status → display label)
@@ -1021,13 +1091,16 @@ function renderBoard() {
     ? intakes.filter(i => i.client_name.toLowerCase().includes(search) || (i.client_email || '').toLowerCase().includes(search))
     : intakes;
 
-  // Split attorney-directed vs self-service
-  const attorney = filtered.filter(i => i.trust_type !== 'selfservice');
-  const selfservice = filtered.filter(i => i.trust_type === 'selfservice');
+  // Split: active attorney-directed, active self-service, archived
+  const active = filtered.filter(i => i.status !== 'archived');
+  const attorney = active.filter(i => i.trust_type !== 'selfservice');
+  const selfservice = active.filter(i => i.trust_type === 'selfservice');
+  const archived = filtered.filter(i => i.status === 'archived');
 
   // Update tab counts
   document.getElementById('tabCountAttorney').textContent = attorney.length;
   document.getElementById('tabCountSelfService').textContent = selfservice.length;
+  document.getElementById('tabCountArchived').textContent = archived.length;
 
   const buckets = { new: [], reviewed: [], signed: [], complete: [] };
   attorney.forEach(i => {
@@ -1039,8 +1112,9 @@ function renderBoard() {
   renderColumn('colSent', buckets.signed, 'countSent');
   renderColumn('colComplete', buckets.complete, 'countComplete');
 
-  // If self-service tab is active, refresh it too
+  // Refresh active sub-tab
   if (activeTab === 'selfservice') renderSelfServiceTable();
+  if (activeTab === 'archived') renderArchivedTable();
 }
 
 function renderColumn(colId, items, countId) {
@@ -1090,7 +1164,7 @@ function renderColumn(colId, items, countId) {
 // ── Self-Service Table ────────────────────────────────────────────────────
 function renderSelfServiceTable() {
   const search = (document.getElementById('searchInput').value || '').toLowerCase();
-  const ssIntakes = intakes.filter(i => i.trust_type === 'selfservice');
+  const ssIntakes = intakes.filter(i => i.trust_type === 'selfservice' && i.status !== 'archived');
   const filtered = search
     ? ssIntakes.filter(i => i.client_name.toLowerCase().includes(search) || (i.client_email || '').toLowerCase().includes(search))
     : ssIntakes;
@@ -1121,29 +1195,68 @@ function renderSelfServiceTable() {
 }
 
 async function archiveSelfService(id) {
+  if (!confirm('Archive this self-service intake?')) return;
   try {
-    await fetch(`/api/intakes/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'complete' })
-    });
+    await fetch(`/api/intakes/${id}/archive`, { method: 'POST' });
     const intake = intakes.find(i => i.id === id);
-    if (intake) intake.status = 'complete';
-    renderSelfServiceTable();
+    if (intake) { intake.previous_status = intake.status; intake.status = 'archived'; }
+    renderBoard();
   } catch (err) {
     console.error('Failed to archive:', err);
   }
 }
 
 async function deleteSelfService(id) {
-  if (!confirm('Delete this self-service intake? This cannot be undone.')) return;
+  if (!confirm('Remove this self-service intake? It will be moved to the Archived tab.')) return;
   try {
     await fetch(`/api/intakes/${id}`, { method: 'DELETE' });
-    intakes = intakes.filter(i => i.id !== id);
+    const intake = intakes.find(i => i.id === id);
+    if (intake) { intake.previous_status = intake.status; intake.status = 'archived'; }
     renderBoard();
   } catch (err) {
     console.error('Failed to delete:', err);
   }
+}
+
+// ── Archived Table ────────────────────────────────────────────────────────
+function renderArchivedTable() {
+  const search = (document.getElementById('searchInput').value || '').toLowerCase();
+  const archived = intakes.filter(i => i.status === 'archived');
+  const filtered = search
+    ? archived.filter(i => i.client_name.toLowerCase().includes(search) || (i.client_email || '').toLowerCase().includes(search))
+    : archived;
+
+  const tbody = document.getElementById('archivedTableBody');
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="ss-empty">No archived clients</td></tr>';
+    return;
+  }
+
+  const prevStatusLabels = { new: 'New', reviewed: 'Drafting', signed: 'Sent to Client', complete: 'Complete' };
+
+  tbody.innerHTML = filtered.map(intake => {
+    const date = intake.updated_at
+      ? new Date(intake.updated_at + 'Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : 'Unknown';
+    const typeLabel = intake.trust_type === 'selfservice' ? 'Self-Service'
+      : intake.trust_type === 'joint' ? 'Joint Trust'
+      : intake.trust_type === 'single' ? 'Single Trust'
+      : intake.trust_type === 'snt' ? 'Special Needs Trust'
+      : intake.trust_type === 'standalone' ? 'Attorney-Directed'
+      : escape(intake.trust_type || '');
+    const prevStatus = prevStatusLabels[intake.previous_status] || intake.previous_status || 'New';
+    return `
+      <tr>
+        <td style="font-weight:600;color:var(--navy);cursor:pointer;" onclick="openDetail(${intake.id})">${escape(intake.client_name)}</td>
+        <td style="color:var(--text-muted);">${escape(intake.client_email || '')}</td>
+        <td style="font-size:12px;">${typeLabel}</td>
+        <td>${date}</td>
+        <td><span style="font-size:12px;color:var(--text-muted);">${prevStatus}</span></td>
+        <td>
+          <button class="action-btn action-btn-restore" style="padding:5px 12px;font-size:12px;" onclick="restoreClient(${intake.id})">&#8634; Restore</button>
+        </td>
+      </tr>`;
+  }).join('');
 }
 
 // ── Drag & Drop ────────────────────────────────────────────────────────────
@@ -1497,6 +1610,19 @@ function renderDetail(intake) {
         <span class="notes-saved" id="notesSaved">Saved</span>
       </div>
     </div>
+
+    <div class="detail-section">
+      ${intake.status === 'archived' ? `
+        <div class="detail-actions">
+          <button class="action-btn action-btn-restore" onclick="restoreClient(${intake.id})">&#8634; Restore Client</button>
+        </div>
+      ` : `
+        <div class="detail-actions">
+          <button class="action-btn action-btn-archive" onclick="archiveClient(${intake.id})">&#128451; Archive</button>
+          <button class="action-btn action-btn-delete" onclick="deleteClient(${intake.id}, '${escape(intake.client_name)}')">&#128465; Delete</button>
+        </div>
+      `}
+    </div>
   `;
 }
 
@@ -1528,6 +1654,55 @@ async function saveNotes(id) {
     setTimeout(() => savedEl.classList.remove('show'), 2000);
   } catch (err) {
     console.error('Failed to save notes:', err);
+  }
+}
+
+// Archive a client (soft delete — preserves data)
+async function archiveClient(id) {
+  if (!confirm('Archive this client? They will be moved to the Archived tab and can be restored later.')) return;
+  try {
+    const res = await fetch(`/api/intakes/${id}/archive`, { method: 'POST' });
+    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    // Update local data
+    const intake = intakes.find(i => i.id === id);
+    if (intake) { intake.previous_status = intake.status; intake.status = 'archived'; }
+    closeDetailPanel();
+    renderBoard();
+  } catch (err) {
+    console.error('Failed to archive:', err);
+    alert('Failed to archive client. Please try again.');
+  }
+}
+
+// Delete a client (soft delete — same as archive)
+async function deleteClient(id, name) {
+  if (!confirm(`Remove "${name}" from your active board?\n\nThis will move them to the Archived tab. Their data is preserved and you can restore them at any time.`)) return;
+  try {
+    const res = await fetch(`/api/intakes/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    const intake = intakes.find(i => i.id === id);
+    if (intake) { intake.previous_status = intake.status; intake.status = 'archived'; }
+    closeDetailPanel();
+    renderBoard();
+  } catch (err) {
+    console.error('Failed to delete:', err);
+    alert('Failed to remove client. Please try again.');
+  }
+}
+
+// Restore an archived client to their previous status
+async function restoreClient(id) {
+  try {
+    const res = await fetch(`/api/intakes/${id}/restore`, { method: 'POST' });
+    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    const result = await res.json();
+    const intake = intakes.find(i => i.id === id);
+    if (intake) { intake.status = result.restoredStatus || 'new'; intake.previous_status = null; }
+    closeDetailPanel();
+    renderBoard();
+  } catch (err) {
+    console.error('Failed to restore:', err);
+    alert('Failed to restore client. Please try again.');
   }
 }
 
