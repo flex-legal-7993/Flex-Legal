@@ -1244,6 +1244,7 @@ function proceedAfterPayment() {
   document.getElementById('paymentScreen').classList.add('hidden');
   document.getElementById('progressWrap').classList.remove('hidden');
   document.getElementById('chatCard').classList.remove('hidden');
+  pushScreen('chat');
   // Self-service chat footer — no attorney-client relationship
   const ssFooter = document.getElementById('chatFooterNote');
   if (ssFooter) ssFooter.textContent = 'This is a document preparation service only. No attorney-client relationship is created. AI technology is used to collect your information \u2014 it does not provide legal advice. Flex Legal Services LLC \u2014 Licensed in Utah.';
@@ -1296,6 +1297,7 @@ function confirmStartOver() {
   document.getElementById('pkgScreen').classList.remove('hidden');
 
   setWaiting(false);
+  pushScreen('packages');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -1398,6 +1400,7 @@ function proceedToConsent() {
       const titles = { 'POA — Self-Service': 'Financial Power of Attorney', 'Healthcare Directive — Self-Service': 'Healthcare Directive', 'Will — Self-Service': 'Last Will', 'All Three Documents — Self-Service': 'All Three Documents — Bundle' };
       document.getElementById('paymentTitle').textContent = titles[selectedPackage] || selectedPackage;
       document.getElementById('paymentScreen').classList.remove('hidden');
+      pushScreen('payment');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   } else {
@@ -1410,8 +1413,81 @@ function proceedToConsent() {
 
   document.getElementById('pkgScreen').classList.add('hidden');
   document.getElementById('consentScreen').classList.remove('hidden');
+  pushScreen('consent');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+// ─── Browser History Navigation ──────────────────────────────────────────────
+// Push state when transitioning between screens so the browser back button works
+function pushScreen(screenName) {
+  history.pushState({ screen: screenName }, '', '');
+}
+
+// Hide ALL screens, then the caller shows the right one
+function hideAllScreens() {
+  document.getElementById('pkgScreen').classList.add('hidden');
+  document.getElementById('consentScreen').classList.add('hidden');
+  document.getElementById('paymentScreen').classList.add('hidden');
+  document.getElementById('chatCard').classList.add('hidden');
+  document.getElementById('progressWrap').classList.add('hidden');
+  document.getElementById('confirmScreen').classList.remove('visible');
+  document.getElementById('confirmScreen').classList.add('hidden');
+}
+
+window.addEventListener('popstate', (e) => {
+  const screen = e.state && e.state.screen ? e.state.screen : 'packages';
+
+  // If going back from chat or confirmation, warn about losing progress
+  const chatVisible = !document.getElementById('chatCard').classList.contains('hidden');
+  const confirmVisible = document.getElementById('confirmScreen').classList.contains('visible');
+  if ((chatVisible || confirmVisible) && conversationHistory.length > 0) {
+    if (!confirm('Going back will lose your current conversation progress. Are you sure?')) {
+      // Re-push the current state so the forward button doesn't break
+      history.pushState({ screen: chatVisible ? 'chat' : 'confirmation' }, '', '');
+      return;
+    }
+    // Reset chat state
+    conversationHistory = [];
+    collectedData = {};
+    currentStage = 0;
+    const msgs = document.getElementById('chatMessages');
+    if (msgs) msgs.innerHTML = '';
+    const fill = document.getElementById('progressFill');
+    const label = document.getElementById('progressLabel');
+    const pct = document.getElementById('progressPct');
+    if (fill) fill.style.width = '0%';
+    if (label) label.textContent = 'Getting started';
+    if (pct) pct.textContent = '0%';
+    setWaiting(false);
+  }
+
+  hideAllScreens();
+
+  switch (screen) {
+    case 'consent':
+      document.getElementById('consentScreen').classList.remove('hidden');
+      break;
+    case 'payment':
+      document.getElementById('paymentScreen').classList.remove('hidden');
+      break;
+    case 'chat':
+      document.getElementById('progressWrap').classList.remove('hidden');
+      document.getElementById('chatCard').classList.remove('hidden');
+      break;
+    case 'confirmation':
+      document.getElementById('confirmScreen').classList.remove('hidden');
+      document.getElementById('confirmScreen').classList.add('visible');
+      break;
+    case 'packages':
+    default:
+      document.getElementById('pkgScreen').classList.remove('hidden');
+      break;
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+// Set initial state so we have something to go back to
+history.replaceState({ screen: 'packages' }, '', '');
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 const BACKEND_URL = 'https://flex-legal-intake.onrender.com';
@@ -1620,6 +1696,7 @@ function showConfirmation(data) {
   document.getElementById('chatCard').classList.add('hidden');
   document.getElementById('progressWrap').classList.add('hidden');
   document.getElementById('introCard').classList.add('hidden');
+  pushScreen('confirmation');
 
   const screen = document.getElementById('confirmScreen');
   screen.classList.remove('hidden');
@@ -1821,6 +1898,7 @@ consentBtn.addEventListener('click', () => {
     };
     document.getElementById('paymentTitle').textContent = titles[selectedPackage] || selectedPackage;
     document.getElementById('paymentScreen').classList.remove('hidden');
+    pushScreen('payment');
     window.scrollTo({ top: 0, behavior: 'smooth' });
     return;
   }
@@ -1829,6 +1907,7 @@ consentBtn.addEventListener('click', () => {
   consentScreen.classList.add('hidden');
   document.getElementById('progressWrap').classList.remove('hidden');
   document.getElementById('chatCard').classList.remove('hidden');
+  pushScreen('chat');
   setTimeout(() => resizeChatInput(), 50);
 
   const startEndpoint = trustType === 'single' ? '/start-single' : trustType === 'snt' ? '/start-sns' : trustType === 'standalone' ? '/start-standalone' : '/start';
