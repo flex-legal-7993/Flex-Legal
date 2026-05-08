@@ -10,19 +10,104 @@ const PizZip    = require('pizzip');
 const Docxtemplater = require('docxtemplater');
 const fs        = require('fs');
 const path      = require('path');
-const initSqlJs = require('sql.js');
 const bcrypt    = require('bcryptjs');
 const session   = require('express-session');
+const helmet    = require('helmet');
+const rateLimit = require('express-rate-limit');
+const db        = require('./db');
 
 const app = express();
+
+// ─── Security headers ────────────────────────────────────────────────────────
+app.use(helmet({
+  contentSecurityPolicy: false,  // disabled — our inline scripts need to run
+  crossOriginEmbedderPolicy: false
+}));
+
+// ─── Trust Render's proxy for secure cookies and rate limiting ───────────────
+app.set('trust proxy', 1);
+
 app.use(cors());
 app.use(express.json());
-app.use(session({
+
+// ─── Rate limiting ───────────────────────────────────────────────────────────
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,  // 15 minutes
+  max: 100,                   // 100 requests per window per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' }
+});
+
+const chatLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 50,                    // tighter limit on AI chat endpoints
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' }
+});
+
+app.use('/api/', apiLimiter);
+app.use('/chat', chatLimiter);
+app.use('/chat-stream', chatLimiter);
+app.use('/start', chatLimiter);
+app.use('/start-single', chatLimiter);
+app.use('/start-standalone', chatLimiter);
+app.use('/start-sns', chatLimiter);
+app.use('/start-selfservice', chatLimiter);
+
+// ─── Sessions ────────────────────────────────────────────────────────────────
+const sessionConfig = {
   secret: process.env.SESSION_SECRET || 'flex-legal-dev-secret-change-in-production',
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 24 * 60 * 60 * 1000 } // 24 hours
-}));
+  cookie: {
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax'
+  }
+};
+
+// Use Postgres-backed sessions in production
+if (process.env.DATABASE_URL) {
+  const pgSession = require('connect-pg-simple')(session);
+  const { Pool } = require('pg');
+  const sessionPool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
+  });
+  sessionConfig.store = new pgSession({
+    pool: sessionPool,
+    tableName: 'user_sessions',
+    createTableIfMissing: true
+  });
+  console.log('✅ Sessions backed by PostgreSQL');
+} else {
+  console.log('⚠️  Sessions using MemoryStore (dev only — will reset on restart)');
+}
+
+app.use(session(sessionConfig));
+
+// ─── Request logging (production debugging) ──────────────────────────────────
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    // Log API requests and errors, skip static files
+    if (req.path.startsWith('/api/') || res.statusCode >= 400) {
+      console.log(JSON.stringify({
+        ts: new Date().toISOString(),
+        method: req.method,
+        path: req.path,
+        status: res.statusCode,
+        ms: duration,
+        ip: req.ip
+      }));
+    }
+  });
+  next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 const ANTHROPIC_API_KEY  = process.env.ANTHROPIC_API_KEY;
@@ -37,172 +122,11 @@ if (!EMAIL_ENABLED) console.log('⚠️  Email disabled — GMAIL_USER or GMAIL_
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DATABASE — SQLite via sql.js
+// DATABASE — PostgreSQL (production) or SQLite (local dev) via ./db.js
 // ─────────────────────────────────────────────────────────────────────────────
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'intakes.db');
-let db = null;
 
-async function initDatabase() {
-  const SQL = await initSqlJs();
-  const dbDir = path.dirname(DB_PATH);
-  if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
-
-  // Load existing DB or create new
-  if (fs.existsSync(DB_PATH)) {
-    const fileBuffer = fs.readFileSync(DB_PATH);
-    db = new SQL.Database(fileBuffer);
-  } else {
-    db = new SQL.Database();
-  }
-
-  db.run(`CREATE TABLE IF NOT EXISTS intakes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_name TEXT NOT NULL,
-    client_email TEXT,
-    client_phone TEXT,
-    package_type TEXT NOT NULL,
-    trust_type TEXT NOT NULL,
-    intake_data TEXT NOT NULL,
-    documents TEXT DEFAULT '[]',
-    status TEXT DEFAULT 'new',
-    previous_status TEXT DEFAULT NULL,
-    notes TEXT DEFAULT '',
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
-  )`);
-
-  // Migration: add previous_status column if missing (existing databases)
-  try { db.run('ALTER TABLE intakes ADD COLUMN previous_status TEXT DEFAULT NULL'); } catch (e) { /* column already exists */ }
-
-  db.run(`CREATE TABLE IF NOT EXISTS attorneys (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    firm_name TEXT DEFAULT '',
-    created_at TEXT DEFAULT (datetime('now'))
-  )`);
-  // Seed sample clients if database is empty
-  const count = db.exec('SELECT COUNT(*) FROM intakes');
-  if (count[0].values[0][0] === 0) seedSampleClients();
-
-  saveDatabase();
-  console.log('Database initialized at', DB_PATH);
-}
-
-function seedSampleClients() {
-  console.log('Seeding sample clients for dashboard preview...');
-  const samples = [
-    {
-      name: 'Robert & Linda Thompson', email: 'rthompson@email.com', phone: '801-555-2341',
-      package_type: 'Complete Estate Plan — Married', trust_type: 'joint',
-      status: 'new', notes: '',
-      docs: ['Joint Trust'], created: "datetime('now', '-1 day')",
-      data: { Your_First_Name: 'Robert', Your_Last_Name: 'Thompson', Spouse_First_Name: 'Linda',
-        Your_Birth_Date: '03/15/1968', Address: '1842 Maple Dr', City: 'Draper', State: 'Utah',
-        Zip_Code: '84020', County: 'Salt Lake', Your_Cell_Phone: '801-555-2341',
-        Name_of_Trust: 'The Thompson Family Trust', First_Choice_Successor_Trustee: 'Sarah Thompson',
-        Second_Choice_Successor_Trustee: 'Michael Thompson', Full_Legal_Names_of_Children: 'Sarah Thompson, Michael Thompson, Emily Thompson',
-        client_email: 'rthompson@email.com', Trust_Type: 'joint',
-        Attorney_Flags: 'Has property in multiple states | Spouse has prior will from previous marriage' }
-    },
-    {
-      name: 'Maria Santos', email: 'msantos@email.com', phone: '801-555-8912',
-      package_type: 'Complete Estate Plan — Single', trust_type: 'single',
-      status: 'reviewed', notes: 'Reviewed trust provisions. Client has rental property — need to discuss funding the trust with real estate.',
-      docs: ['Single Trust'], created: "datetime('now', '-3 days')",
-      data: { Your_First_Name: 'Maria', Your_Last_Name: 'Santos',
-        Your_Birth_Date: '07/22/1975', Address: '590 E Center St', City: 'Provo', State: 'Utah',
-        Zip_Code: '84606', County: 'Utah', Your_Cell_Phone: '801-555-8912',
-        Name_of_Trust: 'The Maria Santos Revocable Living Trust', First_Choice_Successor_Trustee: 'Carlos Santos',
-        Second_Choice_Successor_Trustee: 'Ana Ramirez', Full_Legal_Names_of_Children: 'Isabella Santos, Diego Santos',
-        client_email: 'msantos@email.com', Trust_Type: 'single' }
-    },
-    {
-      name: 'James & Patricia Kimball', email: 'jpkimball@email.com', phone: '435-555-6743',
-      package_type: 'Complete Estate Plan — Married', trust_type: 'joint',
-      status: 'signed', notes: 'Documents signed 4/18. Waiting on notarized copies to be returned.',
-      docs: ['Joint Trust'], created: "datetime('now', '-7 days')",
-      data: { Your_First_Name: 'James', Your_Last_Name: 'Kimball', Spouse_First_Name: 'Patricia',
-        Your_Birth_Date: '11/03/1955', Address: '2100 N Snow Canyon Pkwy', City: 'St. George', State: 'Utah',
-        Zip_Code: '84770', County: 'Washington', Your_Cell_Phone: '435-555-6743',
-        Name_of_Trust: 'The Kimball Family Trust', First_Choice_Successor_Trustee: 'David Kimball',
-        Second_Choice_Successor_Trustee: 'Rachel Kimball-Wright',
-        Full_Legal_Names_of_Children: 'David Kimball, Rachel Kimball-Wright, Andrew Kimball',
-        client_email: 'jpkimball@email.com', Trust_Type: 'joint' }
-    },
-    {
-      name: 'Angela Whitfield', email: 'awhitfield@email.com', phone: '801-555-3390',
-      package_type: 'Self-Service', trust_type: 'selfservice',
-      status: 'new', notes: '',
-      docs: ['Will', 'Financial POA', 'Healthcare Directive'], created: "datetime('now', '-2 hours')",
-      data: { Your_First_Name: 'Angela', Your_Last_Name: 'Whitfield',
-        Your_Birth_Date: '09/14/1990', Address: '415 S 700 E Apt 12', City: 'Salt Lake City', State: 'Utah',
-        Zip_Code: '84102', County: 'Salt Lake', Your_Cell_Phone: '801-555-3390',
-        has_children: false, Beneficiary_Names: 'Derek Whitfield, Carla Whitfield',
-        First_Choice_Personal_Rep: 'Derek Whitfield', Second_Choice_Personal_Rep: 'Carla Whitfield',
-        client_email: 'awhitfield@email.com', Trust_Type: 'selfservice',
-        needs_dpoa: true, needs_will: true, needs_hcd: true }
-    },
-    {
-      name: 'William Chen', email: 'wchen@email.com', phone: '801-555-1178',
-      package_type: 'Self-Service', trust_type: 'selfservice',
-      status: 'complete', notes: 'Client purchased self-service will only. No follow-up needed.',
-      docs: ['Will'], created: "datetime('now', '-10 days')",
-      data: { Your_First_Name: 'William', Your_Last_Name: 'Chen',
-        Your_Birth_Date: '04/30/1982', Address: '1020 E Tabernacle', City: 'St. George', State: 'Utah',
-        Zip_Code: '84770', County: 'Washington', Your_Cell_Phone: '801-555-1178',
-        has_children: true, has_minor_children: true, Beneficiary_Names: 'Lily Chen, Marcus Chen',
-        First_Choice_Personal_Rep: 'Susan Chen', Second_Choice_Personal_Rep: 'David Park',
-        First_Choice_Guardian: 'Susan Chen', Second_Choice_Guardian: 'David Park',
-        client_email: 'wchen@email.com', Trust_Type: 'selfservice',
-        needs_dpoa: false, needs_will: true, needs_hcd: false }
-    },
-    {
-      name: 'Steven & Karen Merrill', email: 'smerrill@email.com', phone: '801-555-4402',
-      package_type: 'Complete Estate Plan — Married', trust_type: 'joint',
-      status: 'complete', notes: 'All documents signed, notarized, and filed. Trust funding letter sent. Case closed.',
-      docs: ['Joint Trust'], created: "datetime('now', '-14 days')",
-      data: { Your_First_Name: 'Steven', Your_Last_Name: 'Merrill', Spouse_First_Name: 'Karen',
-        Your_Birth_Date: '06/12/1960', Address: '834 E Vineyard Way', City: 'Orem', State: 'Utah',
-        Zip_Code: '84097', County: 'Utah', Your_Cell_Phone: '801-555-4402',
-        Name_of_Trust: 'The Merrill Family Trust', First_Choice_Successor_Trustee: 'Brandon Merrill',
-        Second_Choice_Successor_Trustee: 'Jessica Merrill-Brown',
-        Full_Legal_Names_of_Children: 'Brandon Merrill, Jessica Merrill-Brown',
-        client_email: 'smerrill@email.com', Trust_Type: 'joint' }
-    },
-    {
-      name: 'Diane Kowalski', email: 'dkowalski@email.com', phone: '385-555-9021',
-      package_type: 'Attorney-Directed Documents', trust_type: 'standalone',
-      status: 'reviewed', notes: 'DPOA and HCD look good. Scheduling signing appointment for next week.',
-      docs: ['Financial POA', 'Healthcare Directive'], created: "datetime('now', '-5 days')",
-      data: { Your_First_Name: 'Diane', Your_Last_Name: 'Kowalski',
-        Your_Birth_Date: '02/28/1972', Address: '2255 Parleys Way', City: 'Salt Lake City', State: 'Utah',
-        Zip_Code: '84109', County: 'Salt Lake', Your_Cell_Phone: '385-555-9021',
-        DPOA_Agent_Name: 'Thomas Kowalski', Agent_Address: '2255 Parleys Way',
-        Agent_City: 'Salt Lake City', Agent_State: 'Utah', Agent_Zip: '84109',
-        client_email: 'dkowalski@email.com', Trust_Type: 'standalone',
-        needs_dpoa: true, needs_will: false, needs_hcd: true }
-    }
-  ];
-
-  samples.forEach(s => {
-    db.run(`INSERT INTO intakes (client_name, client_email, client_phone, package_type, trust_type, intake_data, documents, status, notes, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${s.created})`,
-      [s.name, s.email, s.phone, s.package_type, s.trust_type, JSON.stringify(s.data), JSON.stringify(s.docs), s.status, s.notes]
-    );
-  });
-  console.log(`Seeded ${samples.length} sample clients`);
-}
-
-function saveDatabase() {
-  if (!db) return;
-  const data = db.export();
-  const buffer = Buffer.from(data);
-  fs.writeFileSync(DB_PATH, buffer);
-}
-
-function saveIntake(intakeData, trustType) {
-  if (!db) { console.error('Database not initialized'); return null; }
+async function saveIntake(intakeData, trustType) {
+  if (!db.isReady()) { console.error('Database not initialized'); return null; }
   let clientName;
   if (trustType === 'snt') {
     clientName = `${intakeData.Husbands_first_name || ''} & ${intakeData.Wifes_first_name || ''} ${intakeData.LAST_NAME || ''}`.trim() || 'Unknown';
@@ -221,7 +145,6 @@ function saveIntake(intakeData, trustType) {
   };
   const packageType = packageMap[trustType] || trustType;
 
-  // Figure out which documents were selected
   const docs = [];
   if (trustType === 'joint') docs.push('Joint Trust');
   else if (trustType === 'single') docs.push('Single Trust');
@@ -230,16 +153,13 @@ function saveIntake(intakeData, trustType) {
   if (intakeData.needs_will || intakeData.needs_will === 'true') docs.push('Will');
   if (intakeData.needs_hcd || intakeData.needs_hcd === 'true') docs.push('Healthcare Directive');
 
-  const stmt = db.prepare(`INSERT INTO intakes (client_name, client_email, client_phone, package_type, trust_type, intake_data, documents)
-    VALUES (?, ?, ?, ?, ?, ?, ?)`);
-  stmt.run([clientName, clientEmail, clientPhone, packageType, trustType, JSON.stringify(intakeData), JSON.stringify(docs)]);
-  stmt.free();
-
-  const result = db.exec('SELECT last_insert_rowid() as id');
-  const id = result[0].values[0][0];
-  saveDatabase();
-  console.log(`Intake saved to database: ID ${id} — ${clientName}`);
-  return id;
+  const result = await db.execute(
+    `INSERT INTO intakes (client_name, client_email, client_phone, package_type, trust_type, intake_data, documents)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [clientName, clientEmail, clientPhone, packageType, trustType, JSON.stringify(intakeData), JSON.stringify(docs)]
+  );
+  console.log(`Intake saved to database: ID ${result.lastId} — ${clientName}`);
+  return result.lastId;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1512,7 +1432,7 @@ app.post('/chat', async (req, res) => {
         return res.json({ reply: closingMessage, complete: false });
       }
       // Save to database
-      saveIntake(intakeData, trustType);
+      await saveIntake(intakeData, trustType);
       // Self-service: auto-generate and email docs to client
       // Attorney-directed: send notification only — attorney reviews on dashboard and generates docs manually
       if (trustType === 'selfservice') {
@@ -1554,7 +1474,7 @@ app.post('/chat-stream', async (req, res) => {
       res.write(`data: ${JSON.stringify({ type: 'text', text })}\n\n`);
     });
 
-    stream.on('finalMessage', () => {
+    stream.on('finalMessage', async () => {
       if (fullText.includes('[INTAKE_COMPLETE]')) {
         const parts = fullText.split('[INTAKE_COMPLETE]');
         const closingMessage = parts[0].trim();
@@ -1563,7 +1483,7 @@ app.post('/chat-stream', async (req, res) => {
         try {
           intakeData = JSON.parse(jsonStr);
           // Save to database
-          saveIntake(intakeData, trustType);
+          await saveIntake(intakeData, trustType);
           // Self-service: auto-generate and email docs to client
           // Attorney-directed: send notification only
           if (trustType === 'selfservice') {
@@ -2635,27 +2555,23 @@ app.post('/api/auth/register', async (req, res) => {
   const { email, password, firmName } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
   if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
-  if (!db) return res.status(503).json({ error: 'Database not ready' });
+  if (!db.isReady()) return res.status(503).json({ error: 'Database not ready' });
 
   try {
-    // Check if email exists
-    const existing = db.exec('SELECT id FROM attorneys WHERE email = ?', [email.toLowerCase()]);
-    if (existing.length && existing[0].values.length) {
+    const existing = await db.queryOne('SELECT id FROM attorneys WHERE email = ?', [email.toLowerCase()]);
+    if (existing) {
       return res.status(409).json({ error: 'An account with this email already exists' });
     }
 
     const hash = await bcrypt.hash(password, 10);
-    db.run('INSERT INTO attorneys (email, password_hash, firm_name) VALUES (?, ?, ?)', [email.toLowerCase(), hash, firmName || '']);
-    saveDatabase();
+    await db.execute('INSERT INTO attorneys (email, password_hash, firm_name) VALUES (?, ?, ?)', [email.toLowerCase(), hash, firmName || '']);
 
-    // Auto-login after registration
-    const result = db.exec('SELECT id, email, firm_name FROM attorneys WHERE email = ?', [email.toLowerCase()]);
-    const attorney = result[0].values[0];
-    req.session.attorneyId = attorney[0];
-    req.session.attorneyEmail = attorney[1];
-    req.session.firmName = attorney[2];
+    const attorney = await db.queryOne('SELECT id, email, firm_name FROM attorneys WHERE email = ?', [email.toLowerCase()]);
+    req.session.attorneyId = attorney.id;
+    req.session.attorneyEmail = attorney.email;
+    req.session.firmName = attorney.firm_name;
 
-    res.json({ success: true, email: attorney[1] });
+    res.json({ success: true, email: attorney.email });
   } catch (err) {
     console.error('Registration error:', err);
     res.status(500).json({ error: 'Registration failed' });
@@ -2666,23 +2582,22 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-  if (!db) return res.status(503).json({ error: 'Database not ready' });
+  if (!db.isReady()) return res.status(503).json({ error: 'Database not ready' });
 
   try {
-    const result = db.exec('SELECT id, email, password_hash, firm_name FROM attorneys WHERE email = ?', [email.toLowerCase()]);
-    if (!result.length || !result[0].values.length) {
+    const attorney = await db.queryOne('SELECT id, email, password_hash, firm_name FROM attorneys WHERE email = ?', [email.toLowerCase()]);
+    if (!attorney) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    const [id, dbEmail, hash, firmName] = result[0].values[0];
-    const match = await bcrypt.compare(password, hash);
+    const match = await bcrypt.compare(password, attorney.password_hash);
     if (!match) return res.status(401).json({ error: 'Invalid email or password' });
 
-    req.session.attorneyId = id;
-    req.session.attorneyEmail = dbEmail;
-    req.session.firmName = firmName;
+    req.session.attorneyId = attorney.id;
+    req.session.attorneyEmail = attorney.email;
+    req.session.firmName = attorney.firm_name;
 
-    res.json({ success: true, email: dbEmail });
+    res.json({ success: true, email: attorney.email });
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'Login failed' });
@@ -2708,105 +2623,109 @@ app.get('/api/auth/me', (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // List all intakes
-app.get('/api/intakes', requireAuth, (req, res) => {
-  if (!db) return res.status(503).json({ error: 'Database not ready' });
-  const result = db.exec('SELECT id, client_name, client_email, client_phone, package_type, trust_type, documents, status, previous_status, notes, created_at, updated_at FROM intakes ORDER BY created_at DESC');
-  if (!result.length) return res.json([]);
-  const cols = result[0].columns;
-  const rows = result[0].values.map(row => {
-    const obj = {};
-    cols.forEach((col, i) => { obj[col] = row[i]; });
-    obj.documents = JSON.parse(obj.documents || '[]');
-    return obj;
-  });
-  res.json(rows);
+app.get('/api/intakes', requireAuth, async (req, res) => {
+  if (!db.isReady()) return res.status(503).json({ error: 'Database not ready' });
+  try {
+    const rows = await db.query('SELECT id, client_name, client_email, client_phone, package_type, trust_type, documents, status, previous_status, notes, created_at, updated_at FROM intakes ORDER BY created_at DESC');
+    rows.forEach(r => { r.documents = JSON.parse(r.documents || '[]'); });
+    res.json(rows);
+  } catch (err) {
+    console.error('List intakes error:', err);
+    res.status(500).json({ error: 'Failed to load intakes' });
+  }
 });
 
 // Get single intake with full data
-app.get('/api/intakes/:id', requireAuth, (req, res) => {
-  if (!db) return res.status(503).json({ error: 'Database not ready' });
-  const stmt = db.prepare('SELECT * FROM intakes WHERE id = ?');
-  stmt.bind([parseInt(req.params.id)]);
-  if (!stmt.step()) { stmt.free(); return res.status(404).json({ error: 'Not found' }); }
-  const row = stmt.getAsObject();
-  stmt.free();
-  row.intake_data = JSON.parse(row.intake_data || '{}');
-  row.documents = JSON.parse(row.documents || '[]');
-  res.json(row);
+app.get('/api/intakes/:id', requireAuth, async (req, res) => {
+  if (!db.isReady()) return res.status(503).json({ error: 'Database not ready' });
+  try {
+    const row = await db.queryOne('SELECT * FROM intakes WHERE id = ?', [parseInt(req.params.id)]);
+    if (!row) return res.status(404).json({ error: 'Not found' });
+    row.intake_data = JSON.parse(row.intake_data || '{}');
+    row.documents = JSON.parse(row.documents || '[]');
+    res.json(row);
+  } catch (err) {
+    console.error('Get intake error:', err);
+    res.status(500).json({ error: 'Failed to load intake' });
+  }
 });
 
 // Update intake (status, notes)
-app.patch('/api/intakes/:id', requireAuth, (req, res) => {
-  if (!db) return res.status(503).json({ error: 'Database not ready' });
-  const { status, notes } = req.body;
-  const id = parseInt(req.params.id);
-  if (status) {
-    db.run('UPDATE intakes SET status = ?, updated_at = datetime(\'now\') WHERE id = ?', [status, id]);
+app.patch('/api/intakes/:id', requireAuth, async (req, res) => {
+  if (!db.isReady()) return res.status(503).json({ error: 'Database not ready' });
+  try {
+    const { status, notes } = req.body;
+    const id = parseInt(req.params.id);
+    if (status) {
+      await db.execute("UPDATE intakes SET status = ?, updated_at = datetime('now') WHERE id = ?", [status, id]);
+    }
+    if (notes !== undefined) {
+      await db.execute("UPDATE intakes SET notes = ?, updated_at = datetime('now') WHERE id = ?", [notes, id]);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Update intake error:', err);
+    res.status(500).json({ error: 'Failed to update intake' });
   }
-  if (notes !== undefined) {
-    db.run('UPDATE intakes SET notes = ?, updated_at = datetime(\'now\') WHERE id = ?', [notes, id]);
-  }
-  saveDatabase();
-  res.json({ success: true });
 });
 
 // Archive an intake (soft delete — preserves data, stores previous status for restore)
-app.post('/api/intakes/:id/archive', requireAuth, (req, res) => {
-  if (!db) return res.status(503).json({ error: 'Database not ready' });
-  const id = parseInt(req.params.id);
-  const stmt = db.prepare('SELECT status FROM intakes WHERE id = ?');
-  stmt.bind([id]);
-  if (!stmt.step()) { stmt.free(); return res.status(404).json({ error: 'Not found' }); }
-  const row = stmt.getAsObject();
-  stmt.free();
-  if (row.status === 'archived') return res.json({ success: true, message: 'Already archived' });
-  db.run('UPDATE intakes SET previous_status = ?, status = ?, updated_at = datetime(\'now\') WHERE id = ?',
-    [row.status, 'archived', id]);
-  saveDatabase();
-  res.json({ success: true });
+app.post('/api/intakes/:id/archive', requireAuth, async (req, res) => {
+  if (!db.isReady()) return res.status(503).json({ error: 'Database not ready' });
+  try {
+    const id = parseInt(req.params.id);
+    const row = await db.queryOne('SELECT status FROM intakes WHERE id = ?', [id]);
+    if (!row) return res.status(404).json({ error: 'Not found' });
+    if (row.status === 'archived') return res.json({ success: true, message: 'Already archived' });
+    await db.execute("UPDATE intakes SET previous_status = ?, status = ?, updated_at = datetime('now') WHERE id = ?",
+      [row.status, 'archived', id]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Archive error:', err);
+    res.status(500).json({ error: 'Failed to archive' });
+  }
 });
 
 // Restore an archived intake to its previous status
-app.post('/api/intakes/:id/restore', requireAuth, (req, res) => {
-  if (!db) return res.status(503).json({ error: 'Database not ready' });
-  const id = parseInt(req.params.id);
-  const stmt = db.prepare('SELECT status, previous_status FROM intakes WHERE id = ?');
-  stmt.bind([id]);
-  if (!stmt.step()) { stmt.free(); return res.status(404).json({ error: 'Not found' }); }
-  const row = stmt.getAsObject();
-  stmt.free();
-  if (row.status !== 'archived') return res.json({ success: true, message: 'Not archived' });
-  const restoreTo = row.previous_status || 'new';
-  db.run('UPDATE intakes SET status = ?, previous_status = NULL, updated_at = datetime(\'now\') WHERE id = ?',
-    [restoreTo, id]);
-  saveDatabase();
-  res.json({ success: true, restoredStatus: restoreTo });
+app.post('/api/intakes/:id/restore', requireAuth, async (req, res) => {
+  if (!db.isReady()) return res.status(503).json({ error: 'Database not ready' });
+  try {
+    const id = parseInt(req.params.id);
+    const row = await db.queryOne('SELECT status, previous_status FROM intakes WHERE id = ?', [id]);
+    if (!row) return res.status(404).json({ error: 'Not found' });
+    if (row.status !== 'archived') return res.json({ success: true, message: 'Not archived' });
+    const restoreTo = row.previous_status || 'new';
+    await db.execute("UPDATE intakes SET status = ?, previous_status = NULL, updated_at = datetime('now') WHERE id = ?",
+      [restoreTo, id]);
+    res.json({ success: true, restoredStatus: restoreTo });
+  } catch (err) {
+    console.error('Restore error:', err);
+    res.status(500).json({ error: 'Failed to restore' });
+  }
 });
 
 // Delete an intake (soft delete — same as archive, preserves data)
-app.delete('/api/intakes/:id', requireAuth, (req, res) => {
-  if (!db) return res.status(503).json({ error: 'Database not ready' });
-  const id = parseInt(req.params.id);
-  const stmt = db.prepare('SELECT status FROM intakes WHERE id = ?');
-  stmt.bind([id]);
-  if (!stmt.step()) { stmt.free(); return res.status(404).json({ error: 'Not found' }); }
-  const row = stmt.getAsObject();
-  stmt.free();
-  if (row.status === 'archived') return res.json({ success: true, message: 'Already archived' });
-  db.run('UPDATE intakes SET previous_status = ?, status = ?, updated_at = datetime(\'now\') WHERE id = ?',
-    [row.status, 'archived', id]);
-  saveDatabase();
-  res.json({ success: true });
+app.delete('/api/intakes/:id', requireAuth, async (req, res) => {
+  if (!db.isReady()) return res.status(503).json({ error: 'Database not ready' });
+  try {
+    const id = parseInt(req.params.id);
+    const row = await db.queryOne('SELECT status FROM intakes WHERE id = ?', [id]);
+    if (!row) return res.status(404).json({ error: 'Not found' });
+    if (row.status === 'archived') return res.json({ success: true, message: 'Already archived' });
+    await db.execute("UPDATE intakes SET previous_status = ?, status = ?, updated_at = datetime('now') WHERE id = ?",
+      [row.status, 'archived', id]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete error:', err);
+    res.status(500).json({ error: 'Failed to delete' });
+  }
 });
 
 // Re-generate and download a document
-app.get('/api/intakes/:id/download/:docType', requireAuth, (req, res) => {
-  if (!db) return res.status(503).json({ error: 'Database not ready' });
-  const stmt = db.prepare('SELECT * FROM intakes WHERE id = ?');
-  stmt.bind([parseInt(req.params.id)]);
-  if (!stmt.step()) { stmt.free(); return res.status(404).json({ error: 'Not found' }); }
-  const row = stmt.getAsObject();
-  stmt.free();
+app.get('/api/intakes/:id/download/:docType', requireAuth, async (req, res) => {
+  if (!db.isReady()) return res.status(503).json({ error: 'Database not ready' });
+  const row = await db.queryOne('SELECT * FROM intakes WHERE id = ?', [parseInt(req.params.id)]);
+  if (!row) return res.status(404).json({ error: 'Not found' });
   const data = JSON.parse(row.intake_data || '{}');
   const lastName = data.Your_Last_Name || data.LAST_NAME || 'Client';
   const dateStr = new Date(row.created_at).toISOString().slice(0, 10);
@@ -2921,40 +2840,32 @@ app.get('/api/intakes/:id/download/:docType', requireAuth, (req, res) => {
 });
 
 // ─── Update intake fields (attorney edits before generating docs) ─────────────
-app.patch('/api/intakes/:id/fields', requireAuth, (req, res) => {
-  if (!db) return res.status(503).json({ error: 'Database not ready' });
-  const id = parseInt(req.params.id);
-  const updates = req.body.fields; // { fieldName: newValue, ... }
-  if (!updates || typeof updates !== 'object') return res.status(400).json({ error: 'Missing fields object' });
+app.patch('/api/intakes/:id/fields', requireAuth, async (req, res) => {
+  if (!db.isReady()) return res.status(503).json({ error: 'Database not ready' });
+  try {
+    const id = parseInt(req.params.id);
+    const updates = req.body.fields;
+    if (!updates || typeof updates !== 'object') return res.status(400).json({ error: 'Missing fields object' });
 
-  const stmt = db.prepare('SELECT intake_data FROM intakes WHERE id = ?');
-  stmt.bind([id]);
-  if (!stmt.step()) { stmt.free(); return res.status(404).json({ error: 'Not found' }); }
-  const row = stmt.getAsObject();
-  stmt.free();
+    const row = await db.queryOne('SELECT intake_data FROM intakes WHERE id = ?', [id]);
+    if (!row) return res.status(404).json({ error: 'Not found' });
 
-  const data = JSON.parse(row.intake_data || '{}');
-  // Merge updates into intake data
-  Object.entries(updates).forEach(([key, value]) => {
-    data[key] = value;
-  });
+    const data = JSON.parse(row.intake_data || '{}');
+    Object.entries(updates).forEach(([key, value]) => { data[key] = value; });
 
-  const updateStmt = db.prepare("UPDATE intakes SET intake_data = ?, updated_at = datetime('now') WHERE id = ?");
-  updateStmt.run([JSON.stringify(data), id]);
-  updateStmt.free();
-  saveDatabase();
-
-  res.json({ ok: true, updated: Object.keys(updates) });
+    await db.execute("UPDATE intakes SET intake_data = ?, updated_at = datetime('now') WHERE id = ?", [JSON.stringify(data), id]);
+    res.json({ ok: true, updated: Object.keys(updates) });
+  } catch (err) {
+    console.error('Update fields error:', err);
+    res.status(500).json({ error: 'Failed to update fields' });
+  }
 });
 
 // ─── Generate document on demand (attorney clicks Generate) ──────────────────
-app.post('/api/intakes/:id/generate', requireAuth, (req, res) => {
-  if (!db) return res.status(503).json({ error: 'Database not ready' });
-  const stmt = db.prepare('SELECT * FROM intakes WHERE id = ?');
-  stmt.bind([parseInt(req.params.id)]);
-  if (!stmt.step()) { stmt.free(); return res.status(404).json({ error: 'Not found' }); }
-  const row = stmt.getAsObject();
-  stmt.free();
+app.post('/api/intakes/:id/generate', requireAuth, async (req, res) => {
+  if (!db.isReady()) return res.status(503).json({ error: 'Database not ready' });
+  const row = await db.queryOne('SELECT * FROM intakes WHERE id = ?', [parseInt(req.params.id)]);
+  if (!row) return res.status(404).json({ error: 'Not found' });
 
   const data = JSON.parse(row.intake_data || '{}');
   const lastName = data.Your_Last_Name || data.LAST_NAME || 'Client';
@@ -3073,16 +2984,13 @@ app.post('/api/dashboard-chat', requireAuth, async (req, res) => {
     // Build system prompt — inject intake data if an intake is selected
     let systemPrompt = DASHBOARD_CHAT_SYSTEM;
 
-    if (intakeId && db) {
+    if (intakeId && db.isReady()) {
       try {
-        const stmt = db.prepare('SELECT * FROM intakes WHERE id = ?');
-        stmt.bind([intakeId]);
-        if (stmt.step()) {
-          const row = stmt.getAsObject();
+        const row = await db.queryOne('SELECT * FROM intakes WHERE id = ?', [intakeId]);
+        if (row) {
           const intakeData = JSON.parse(row.intake_data || '{}');
           systemPrompt += `\n\nCURRENTLY SELECTED INTAKE:\n- Client: ${row.client_name}\n- Package: ${row.package_type}\n- Trust Type: ${row.trust_type}\n- Status: ${row.status}\n- Submitted: ${row.created_at}\n- Attorney Notes: ${row.notes || 'None'}\n\nFULL INTAKE DATA:\n${JSON.stringify(intakeData, null, 2)}`;
         }
-        stmt.free();
       } catch (dbErr) {
         console.error('Dashboard chat — failed to load intake:', dbErr);
       }
@@ -3120,8 +3028,11 @@ app.post('/api/dashboard-chat', requireAuth, async (req, res) => {
 const PORT = process.env.PORT || 3000;
 
 // Initialize database then start server
-initDatabase().then(() => {
-  app.listen(PORT, () => console.log(`Flex Legal intake server running on port ${PORT}`));
+db.initDatabase().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Flex Legal intake server running on port ${PORT}`);
+    console.log(`Database mode: ${db.getMode()}`);
+  });
 }).catch(err => {
   console.error('Database init failed:', err);
   app.listen(PORT, () => console.log(`Flex Legal intake server running on port ${PORT} (no database)`));
